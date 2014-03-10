@@ -36,4 +36,8 @@
         op2 '([:= 2] [:- 3])
         [op1' op2'] (transform [op1 op2])]
     (is (= (apply-ops "brian" op1 op2')
-           (apply-ops "brian" op2 op1')))))
+           (apply-ops "brian" op2 op1'))))
+  (let [op1 '([:= 3] [:+ "xs"] [:= 3])
+        op2 '([:- 6])
+        [op1' op2'] (transform [op1 op2])]
+    (is (= (apply-ops "foobar" op1 op2') "bar"))))

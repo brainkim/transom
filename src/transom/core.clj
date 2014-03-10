@@ -36,11 +36,6 @@
                 :else (cons sop op'))))]
     (reduce f nil (reverse op))))
 
-(defn split-sop
-  [n [a v :as sop]]
-  (let [v (- v n)]
-    [[a n] [a v]]))
-
 (defn transform
   [[op1 op2]]
   (assert (= (count-op op1) (count-op op2)))
@@ -48,6 +43,10 @@
     (let [sop1 (first op1) sop2 (first op2)]
       (match [sop1 sop2]
         [nil nil] [(reverse op1') (reverse op2')]
+        [[:+ _] _]
+          (recur [(rest op1) op2] [op1' (cons sop1 op2')])
+        [_ [:+ v1]]
+          (recur [op1 (rest op2)] [(cons sop2 op1') op2'])
         [[:- v1] [:- v2]]
           (condp = (compare v1 v2)
             -1 (recur [(rest op1) (cons [:- (- v2 v1)] (rest op2))]
