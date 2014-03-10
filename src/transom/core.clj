@@ -49,49 +49,43 @@
       (match [sop1 sop2]
         [nil nil] [(reverse op1') (reverse op2')]
         [[:- v1] [:- v2]]
-          (let [op1 (if (zero? (- v2 v1))
-                      (rest op1)
-                      (cons [:- (- v2 v1)] op1'))
-                op2 (if (zero? (- v1 v2))
-                      (rest op2)
-                      (cons [:- (- v1 v2)] op2'))]
-            (recur [op1 op2] [op1' op2']))
+          (condp = (compare v1 v2)
+            -1 (recur [(rest op1) (cons [:- (- v2 v1)] (rest op2))]
+                      [op1' op2'])
+            0  (recur [(rest op1) (rest op2)]
+                      [op1' op2'])
+            1  (recur [(cons [:- (- v1 v2)] (rest op1)) (rest op2)]
+                      [op1' op2']))
         [[:= v1] [:= v2]]
           (cond
             (= v1 v2)
-            (recur [(rest op1) (rest op2)] [(cons sop1 op1') (cons sop2 op2')])
-            (< v1 v2)
-            (let [[sop2' sop2] (split-sop v1 sop2)]
-              (recur [(rest op1) (cons sop2 (rest op2))]
-                     [(cons sop1 op1') (cons sop2' op2')]))
+            (recur [(rest op1) (rest op2)]
+                   [(cons sop1 op1') (cons sop2 op2')])
             (> v1 v2)
-            (let [[sop1' sop1] (split-sop v2 sop1)]
-              (recur [(cons sop1' (rest op1)) (rest op2)]
-                     [(cons sop1 op1') (cons sop2 op2')])))
+              (recur [(cons [:= (- v1 v2)] (rest op1)) (rest op2)]
+                     [(cons sop2 op1') (cons sop2 op2')])
+            (< v1 v2)
+              (recur [(rest op1) (cons [:= (- v2 v1)] (rest op2))]
+                     [(cons sop1 op1') (cons sop1 op2')]))
         [[:= v1] [:- v2]]
           (cond
             (= v1 v2)
             (recur [(rest op1) (rest op2)]
-                   [(cons sop2 op1') op2'])
+                   [op1' (cons sop2 op2')])
             (> v1 v2)
             (recur [(cons [:= (- v1 v2)] (rest op1)) (rest op2)]
-                   [(cons sop2 op1') op2'])
+                   [op1' (cons sop2 op2')])
             (< v1 v2)
             (recur [(rest op1) (cons [:- (- v2 v1)] (rest op2))]
-                   [(cons sop2 op1') op2']))
+                   [op1' (cons sop2 op2')]))
         [[:- v1] [:= v2]]
           (cond
             (= v1 v2)
             (recur [(rest op1) (rest op2)]
-                   [op1' (cons sop1 op2')])
+                   [(cons sop1 op1') op2'])
             (> v1 v2)
             (recur [(rest op1) (rest op2)]
-                   [op1' (cons sop1 op2')])
+                   [(cons sop1 op1') op2'])
             (< v1 v2)
             (recur [(rest op1) (cons [:= (- v2 v1)] rest op2)]
-                   [op1' (cons sop1 op2')]))))))
-
-(apply-ops "foo" '([:= 1] [:- 2])
-                 '([:- 1]))
-
-(transform ['([:= 1] [:- 2]) '([:- 2] [:= 1])])
+                   [(cons sop1 op1') op2']))))))

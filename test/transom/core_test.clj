@@ -22,8 +22,18 @@
          '([:= 3] [:+ "xsy"] [:= 2]))))
 
 (deftest transform-test
-  (let [op1 '([:+ "x"] [:= 4])
-        op2 '([:= 4] [:+ "x"])
-        [op2' op1'] (transform [op1 op2])]
-    (is (= (apply-ops "abcd" op1 op2')
-           (apply-ops "abcd" op2 op1')))))
+  (let [op1 '([:= 3] [:= 1])
+        op2 '([:= 1] [:= 3])
+        [op1' op2'] (transform [op1 op2])]
+    (is (= (apply-ops "food" op1 op2')
+           (apply-ops "food" op2 op1'))))
+  (let [op1 '([:= 2] [:- 1])
+        op2 '([:- 1] [:= 2])
+        [op1' op2'] (transform [op1 op2])]
+    (is (= (apply-ops "foo" op1 op2')
+           (apply-ops "foo" op2 op1'))))
+  (let [op1 '([:= 2] [:- 2] [:= 1])
+        op2 '([:= 2] [:- 3])
+        [op1' op2'] (transform [op1 op2])]
+    (is (= (apply-ops "brian" op1 op2')
+           (apply-ops "brian" op2 op1')))))
