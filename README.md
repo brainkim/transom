@@ -1,5 +1,4 @@
 # transom
-OT in Clojure
 
 ## License
 Copyright © 2014 Brian Kim

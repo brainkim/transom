@@ -2,6 +2,11 @@
   (:require [clojure.test :refer :all]
             [transom.core :refer :all]))
 
+(deftest count-op-test
+  (let [op '([:= 2] [:- 1] [:+ "foo"])]
+    (is (= (count-before op) 3))
+    (is (= (count-after op) 5))))
+
 (deftest apply-op-test
   (is (= (apply-op "abcd" '([:= 2] [:+ "xs"] [:= 2]))
          "abxscd"))
@@ -40,6 +45,6 @@
   (let [composed-op (compose op1 op2)]
     (is (= (apply-ops in op1 op2)
            (apply-op in composed-op)))))
-(comment 
+
 (deftest compose-test
-  (compose-helper "food" '([:= 3] [:- 1]) '([:= 3] [:+ "d"]))))
+  (compose-helper "food" '([:= 3] [:- 1]) '([:= 3] [:+ "d"])))
