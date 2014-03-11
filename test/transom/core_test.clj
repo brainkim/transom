@@ -21,7 +21,8 @@
   (is (= (pack '([:= 2] [:= 1] [:= 0] [:+ "xs"] [:+ "y"] [:= 0] [:= 2]))
          '([:= 3] [:+ "xsy"] [:= 2]))))
 
-(defn transform-helper [in op1 op2]
+(defn transform-helper
+  [in op1 op2]
   (let [[op1' op2'] (transform [op1 op2])]
     (is (= (apply-ops in op1 op2')
            (apply-ops in op2 op1')))))
@@ -33,3 +34,12 @@
   (transform-helper "brian" '([:= 2] [:- 2] [:= 1]) '([:= 2] [:- 3]))
   (transform-helper "fuck" '([:= 2] [:+ "foo"] [:= 2]) '([:+ "bar"] [:= 4]))
   (transform-helper "pasta" '([:= 1] [:+ "izz"] [:- 3] [:= 1]) '([:- 1] [:= 4])))
+
+(defn compose-helper 
+  [in op1 op2]
+  (let [composed-op (compose op1 op2)]
+    (is (= (apply-ops in op1 op2)
+           (apply-op in composed-op)))))
+(comment 
+(deftest compose-test
+  (compose-helper "food" '([:= 3] [:- 1]) '([:= 3] [:+ "d"]))))
