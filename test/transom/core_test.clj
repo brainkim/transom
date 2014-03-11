@@ -21,23 +21,15 @@
   (is (= (pack '([:= 2] [:= 1] [:= 0] [:+ "xs"] [:+ "y"] [:= 0] [:= 2]))
          '([:= 3] [:+ "xsy"] [:= 2]))))
 
+(defn transform-helper [in op1 op2]
+  (let [[op1' op2'] (transform [op1 op2])]
+    (is (= (apply-ops in op1 op2')
+           (apply-ops in op2 op1')))))
+
 (deftest transform-test
-  (let [op1 '([:= 3] [:= 1])
-        op2 '([:= 1] [:= 3])
-        [op1' op2'] (transform [op1 op2])]
-    (is (= (apply-ops "food" op1 op2')
-           (apply-ops "food" op2 op1'))))
-  (let [op1 '([:= 2] [:- 1])
-        op2 '([:- 1] [:= 2])
-        [op1' op2'] (transform [op1 op2])]
-    (is (= (apply-ops "foo" op1 op2')
-           (apply-ops "foo" op2 op1'))))
-  (let [op1 '([:= 2] [:- 2] [:= 1])
-        op2 '([:= 2] [:- 3])
-        [op1' op2'] (transform [op1 op2])]
-    (is (= (apply-ops "brian" op1 op2')
-           (apply-ops "brian" op2 op1'))))
-  (let [op1 '([:= 3] [:+ "xs"] [:= 3])
-        op2 '([:- 6])
-        [op1' op2'] (transform [op1 op2])]
-    (is (= (apply-ops "foobar" op1 op2') "bar"))))
+  (transform-helper "food" '([:= 3] [:= 1]) '([:= 1] [:= 3]))
+  (transform-helper "foo" '([:= 2] [:- 1]) '([:- 1] [:= 2]))
+  (transform-helper "grandpa" '([:- 2] [:= 5]) '([:= 5] [:- 2]))
+  (transform-helper "brian" '([:= 2] [:- 2] [:= 1]) '([:= 2] [:- 3]))
+  (transform-helper "fuck" '([:= 2] [:+ "foo"] [:= 2]) '([:+ "bar"] [:= 4]))
+  (transform-helper "pasta" '([:= 1] [:+ "izz"] [:- 3] [:= 1]) '([:- 1] [:= 4])))
