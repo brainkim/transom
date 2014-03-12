@@ -26,9 +26,30 @@
   (is (= (pack '([:= 2] [:= 1] [:= 0] [:+ "xs"] [:+ "y"] [:= 0] [:= 2]))
          '([:= 3] [:+ "xsy"] [:= 2]))))
 
+(deftest align-test
+  (is (= (align '([:= 2] [:+ "xy"] [:= 2])
+                '([:= 1] [:- 2] [:= 1]))
+         [[[:= 1] [:= 1]]
+          [[:= 1] [:- 1]]
+          [[:+ "xy"] :nop]
+          [[:= 1] [:- 1]]
+          [[:= 1] [:= 1]]]))
+  (is (= (align '([:= 2] [:+ "x"] [:- 2])
+                '([:= 2] [:+ "y"] [:- 2]))
+         [[[:= 2]  [:= 2]]
+          [[:+ "x"] :nop]
+          [:nop [:+ "y"]]
+          [[:- 2]  [:- 2]]]))
+  (is (= (align '([:+ "x"] [:= 3])
+                '([:= 3] [:+ "y"]))
+         [[[:+ "x"] :nop]
+          [[:= 3] [:= 3]]
+          [:nop [:+ "y"]]])))
+
+
 (defn transform-helper
   [in op1 op2]
-  (let [[op1' op2'] (transform [op1 op2])]
+  (let [[op1' op2'] (transform op1 op2)]
     (is (= (apply-ops in op1 op2')
            (apply-ops in op2 op1')))))
 
@@ -45,6 +66,3 @@
   (let [composed-op (compose op1 op2)]
     (is (= (apply-ops in op1 op2)
            (apply-op in composed-op)))))
-
-(deftest compose-test
-  (compose-helper "food" '([:= 3] [:- 1]) '([:= 3] [:+ "d"])))
