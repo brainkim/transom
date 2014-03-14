@@ -152,65 +152,21 @@
               (recur (cons [o1 left] (rest op1)) (rest op2)
                      (conj out [[o1 taken] sop2])))))))))
 
-(comment 
 (defn compose
   [op1 op2]
-  (assert (= (count-after op1) (count-before op2)))
-  (loop [op1 op1 op2 op2 out []]
-    (let [sop1 (first op1) sop2 (first op2)]
-      (cond (nil? sop1) (concat out op2)
-            (nil? sop2) (concat out op1)
-            :else 
-            (match [sop1 sop2]
-        [[:+ p1] [:+ p2]]
-        (recur (rest op1) (rest op2) (concat out [sop2 sop1]))
-        [[:- _] _]
-        (recur (rest op1) op2 (conj out sop1))
-        [[:+ p1] [:= p2]]
-        (condp = (compare (count p1) p2)
-          -1
-          (recur (rest op1) (cons [:= (- p2 (count p1))] (rest op2))
-                 (conj out sop1))
-          0
-          (recur (rest op1) (rest op2)
-                 (conj out sop1))
-          1
-          (recur (cons [:+ (drop p2 p1)] (rest op1)) (rest op2)
-                 (conj out [:+ (take p2 p1)])))
-        [[:+ p1] [:- p2]]
-        (condp = (compare (count p1) p2)
-          -1
-          (recur (rest op1) (cons [:- (- p2 (count p1))] (rest op2))
-                 out)
-          0
-          (recur (rest op1) (rest op2) out)
-          1
-          (recur (cons [:+ (drop p2 p1)] (rest op1)) (rest op2)
-                 out))
-        [[:= p1] [:+ p2]]
-        (condp = (compare p1 (count p2))
-          -1
-          (recur (rest op1) (rest op2) (conj out sop2))
-          0
-          (recur (rest op1) (rest op2) (conj out sop2))
-          1
-          (recur (cons [:= (- p1 (count p2))] (rest op1))
-                 (rest op2) (conj out sop2)))
-        [[:= p1] [:= p2]]
-        (condp = (compare p1 p2)
-          -1
-          (recur (rest op1) (cons [:= (- p2 p1)] (rest op2)) (conj out sop1))
-          0
-          (recur (rest op1) (rest op2) (conj out sop1))
-          1
-          (recur (cons [:= (- p1 p2)] (rest op1)) (rest op2) (conj out sop2)))
-        [[:= p1] [:- p2]]
-        (condp = (compare p1 p2)
-          -1
-          (recur (rest op1) (cons [:- (- p2 p1)] (rest op2))
-                 (conj out [:- p1]))
-          0
-          (recur (rest op1) (rest op2) (conj out sop2))
-          1
-          (recur (cons [:= (- p1 p2)] (rest op1)) (rest op2)
-                 (conj out sop2)))))))))
+  (pack
+    (reduce (fn [out [sop1 sop2]]
+              (match [sop1 sop2]
+                [[:- _] _]
+                (conj out sop1)
+                [_ [:+ _]]
+                (conj out sop2)
+                [[:+ _] [:= _]]
+                (conj out sop1)
+                [[:+ _] [:- _]]
+                out
+                [[:= _] [:= _]]
+                (conj out sop1) ;; (= sop1 sop2)
+                [[:= _] [:- _]]
+                (conj out sop2)))
+            [] (align-compose op1 op2))))

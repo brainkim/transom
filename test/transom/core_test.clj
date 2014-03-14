@@ -91,7 +91,7 @@
          [[[:- 3] :nop]
           [:nop [:+ "foo"]]
           [[:= 2] [:- 2]]])))
-(comment
+
 (defn compose-helper 
   [in op1 op2]
   (let [composed-op (compose op1 op2)]
@@ -101,4 +101,4 @@
 (deftest compose-test
   (is (= (compose [[:+ "foo"] [:= 3] [:- 2]]
                   [[:= 3] [:+ "bar"] [:- 2] [:= 1]]))
-      [[:+ "foo"] [:+ "bar"] [:- 2] [:- 2] [:= 1]])))
+      [[:+ "foo"] [:+ "bar"] [:- 2] [:- 2] [:= 1]]))
