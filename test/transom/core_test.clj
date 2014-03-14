@@ -61,8 +61,44 @@
   (transform-helper "fuck" '([:= 2] [:+ "foo"] [:= 2]) '([:+ "bar"] [:= 4]))
   (transform-helper "pasta" '([:= 1] [:+ "izz"] [:- 3] [:= 1]) '([:- 1] [:= 4])))
 
+(deftest align-compose-test
+  (is (= (align-compose [[:+ "foo"] [:= 5]]
+                        [[:= 5] [:- 3]])
+         [[[:+ "foo"] [:= 3]]
+          [[:= 2] [:= 2]]
+          [[:= 3] [:- 3]]])) 
+  (is (= (align-compose [[:+ "foo"] [:= 5]]
+                        [[:= 2] [:- 6]])
+         [[[:+ "fo"] [:= 2]]
+          [[:+ "o"] [:- 1]]
+          [[:= 5] [:- 5]]]))
+  (is (= (align-compose [[:- 2] [:+ "bar"] [:= 3]]
+                        [[:+ "foo"] [:- 5] [:= 1]])
+         [[[:- 2] :nop]
+          [:nop [:+ "foo"]]
+          [[:+ "bar"] [:- 3]]
+          [[:= 2] [:- 2]]
+          [[:= 1] [:= 1]]]))
+  (is (= (align-compose [[:+ "foo"] [:= 3] [:- 2]]
+                        [[:= 3] [:+ "bar"] [:= 1] [:- 2]])
+         [[[:+ "foo"] [:= 3]]
+          [:nop [:+ "bar"]]
+          [[:= 1] [:= 1]]
+          [[:= 2] [:- 2]]
+          [[:- 2] :nop]]))
+  (is (= (align-compose [[:- 3] [:= 2]]
+                        [[:+ "foo"] [:- 2]])
+         [[[:- 3] :nop]
+          [:nop [:+ "foo"]]
+          [[:= 2] [:- 2]]])))
+(comment
 (defn compose-helper 
   [in op1 op2]
   (let [composed-op (compose op1 op2)]
     (is (= (apply-ops in op1 op2)
            (apply-op in composed-op)))))
+
+(deftest compose-test
+  (is (= (compose [[:+ "foo"] [:= 3] [:- 2]]
+                  [[:= 3] [:+ "bar"] [:- 2] [:= 1]]))
+      [[:+ "foo"] [:+ "bar"] [:- 2] [:- 2] [:= 1]])))
