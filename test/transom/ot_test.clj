@@ -1,51 +1,48 @@
-(ns transom.core-test
+(ns transom.ot-test
   (:require [clojure.test :refer :all]
-            [transom.core :refer :all]))
+            [midje.sweet :refer :all]
+            [transom.ot :refer :all]))
 
-(deftest count-op-test
-  (let [op '([:= 2] [:- 1] [:+ "foo"])]
-    (is (= (count-before op) 3))
-    (is (= (count-after op) 5))))
+(fact "operations have correct before and after length"
+  (let [op [[:= 2] [:- 1] [:+ "foo"]]]
+    (count-before op) => 3
+    (count-after op)  => 5))
 
-(deftest apply-op-test
-  (is (= (apply-op "abcd" '([:= 2] [:+ "xs"] [:= 2]))
-         "abxscd"))
-  (is (= (apply-op "abcd" '([:- 4]))
-         ""))
-  (is (= (apply-op "abxcd" '([:= 1] [:- 1] [:= 1] [:- 1] [:= 1]))
-         "axd"))
-  (is (thrown? AssertionError (apply-op "abcd" '([:= 2] [:+ "f"] [:- 1])))))
+(fact "apply-op"
+  (apply-op "abcd" [[:= 2] [:+ "xs"] [:= 2]]) => "abxscd"
+  (apply-op "abcd" [[:- 4]]) => ""
+  (apply-op "abxcd" [[:= 1] [:- 1] [:= 1] [:- 1] [:= 1]]) => "axd"
+  (apply-op "abcd" [[:= 2] [:+ "f"] [:- 1]]) => (throws AssertionError))
 
-(deftest apply-ops-test
-  (is (= (apply-ops "foobar" '([:= 3] [:+ "xs"] [:= 3]) '([:= 3] [:- 2] [:= 3]))
-         "foobar")))
+(fact "apply-ops"
+  (apply-ops "foobar" [[:= 3] [:+ "xs"] [:= 3]] [[:= 3] [:- 2] [:= 3]])
+    => "foobar")
 
-(deftest pack-test
-  (is (= (pack '([:= 2] [:= 3] [:+ "xs"] [:+ "y"] [:= 1] [:= 2]))
-         '([:= 5] [:+ "xsy"] [:= 3])))
-  (is (= (pack '([:= 2] [:= 1] [:= 0] [:+ "xs"] [:+ "y"] [:= 0] [:= 2]))
-         '([:= 3] [:+ "xsy"] [:= 2]))))
+(fact "pack packs operation"
+  (pack [[:= 2] :nop [:= 3] [:+ "xs"] [:+ "y"] [:= 1] [:= 2]])
+    => [[:= 5] [:+ "xsy"] [:= 3]]
+  (pack [[:= 2] [:= 1] [:= 0] :nop [:+ "xs"] :nop [:+ "y"] [:= 0] [:= 2]])
+    => [[:= 3] [:+ "xsy"] [:= 2]])
 
-(deftest align-test
-  (is (= (align '([:= 2] [:+ "xy"] [:= 2])
-                '([:= 1] [:- 2] [:= 1]))
-         [[[:= 1] [:= 1]]
-          [[:= 1] [:- 1]]
-          [[:+ "xy"] :nop]
-          [[:= 1] [:- 1]]
-          [[:= 1] [:= 1]]]))
-  (is (= (align '([:= 2] [:+ "x"] [:- 2])
-                '([:= 2] [:+ "y"] [:- 2]))
-         [[[:= 2]  [:= 2]]
-          [[:+ "x"] :nop]
-          [:nop [:+ "y"]]
-          [[:- 2]  [:- 2]]]))
-  (is (= (align '([:+ "x"] [:= 3])
-                '([:= 3] [:+ "y"]))
-         [[[:+ "x"] :nop]
-          [[:= 3] [:= 3]]
-          [:nop [:+ "y"]]])))
-
+(fact "align-transform aligns two operations"
+  (align-transform [[:= 2] [:+ "xy"] [:= 2]]
+                   [[:= 1] [:- 2] [:= 1]])
+    => [[[:= 1] [:= 1]]
+        [[:= 1] [:- 1]]
+        [[:+ "xy"] :nop]
+        [[:= 1] [:- 1]]
+        [[:= 1] [:= 1]]]
+  (align-transform [[:= 2] [:+ "x"] [:- 2]]
+                   [[:= 2] [:+ "y"] [:- 2]])
+    => [[[:= 2]  [:= 2]]
+        [[:+ "x"] :nop]
+        [:nop [:+ "y"]]
+        [[:- 2]  [:- 2]]] 
+  (align-transform [[:+ "x"] [:= 3]]
+                   [[:= 3] [:+ "y"]])
+    => [[[:+ "x"] :nop]
+        [[:= 3] [:= 3]]
+        [:nop [:+ "y"]]])
 
 (defn transform-helper
   [in op1 op2]
@@ -67,11 +64,13 @@
          [[[:+ "foo"] [:= 3]]
           [[:= 2] [:= 2]]
           [[:= 3] [:- 3]]])) 
+
   (is (= (align-compose [[:+ "foo"] [:= 5]]
                         [[:= 2] [:- 6]])
          [[[:+ "fo"] [:= 2]]
           [[:+ "o"] [:- 1]]
           [[:= 5] [:- 5]]]))
+
   (is (= (align-compose [[:- 2] [:+ "bar"] [:= 3]]
                         [[:+ "foo"] [:- 5] [:= 1]])
          [[[:- 2] :nop]
@@ -79,6 +78,7 @@
           [[:+ "bar"] [:- 3]]
           [[:= 2] [:- 2]]
           [[:= 1] [:= 1]]]))
+
   (is (= (align-compose [[:+ "foo"] [:= 3] [:- 2]]
                         [[:= 3] [:+ "bar"] [:= 1] [:- 2]])
          [[[:+ "foo"] [:= 3]]
@@ -86,6 +86,7 @@
           [[:= 1] [:= 1]]
           [[:= 2] [:- 2]]
           [[:- 2] :nop]]))
+
   (is (= (align-compose [[:- 3] [:= 2]]
                         [[:+ "foo"] [:- 2]])
          [[[:- 3] :nop]

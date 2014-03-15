@@ -1,6 +1,13 @@
-(ns transom.core
+(ns transom.ot
   (:require [clojure.core.match :refer [match]]
             [clojure.string :refer [join]]))
+
+(defn count-sop
+  [[o p]]
+  (match [o]
+    [:=] p
+    [:-] p 
+    [:+] (count p)))
 
 (defn count-before
   [op]
@@ -21,6 +28,7 @@
         [[:- v]] c
         [[:+ v]] (+ c (count v))))
     0 op))
+
 
 (defn apply-op
   [doc op]
@@ -61,11 +69,7 @@
   [pairs]
   (map pack (apply mapv vector pairs)))
 
-(defn consumes?
-  [[o p]]
-  (contains? #{:= :-} o))
-
-(defn align
+(defn align-transform
   [op1 op2]
   (loop [op1 op1 op2 op2 out []]
     (let [sop1 (first op1) sop2 (first op2)]
@@ -76,10 +80,10 @@
         (nil? sop2)
         (concat out (map #(vector % :nop) op1))
 
-        (not (consumes? sop1))
+        (= :+ (first sop1))
         (recur (rest op1) op2 (conj out [sop1 :nop]))
 
-        (not (consumes? sop2))
+        (= :+ (first sop2))
         (recur op1 (rest op2) (conj out [:nop sop2]))
 
         :else
@@ -92,7 +96,6 @@
                       (conj out [sop1 sop2]))
             1  (recur (cons [o1 (- p1 p2)] (rest op1)) (rest op2)
                       (conj out [[o1 p2] sop2]))))))))
-
 
 (defn transform
   [op1 op2]
@@ -113,7 +116,7 @@
                 [[:- p1] [:= p2]]
                 (conj out [sop1 :nop])
                 :else out))
-            [] (align op1 op2))))
+            [] (align-transform op1 op2))))
 
 (defn align-compose
   [op1 op2]
@@ -170,3 +173,18 @@
                 [[:= _] [:- _]]
                 (conj out sop2)))
             [] (align-compose op1 op2))))
+
+(defn transform-caret
+  [caret op]
+  ;; caret is the little blinky line thing
+  ;; idx is where we are in the document
+  (assert (<= caret (count-before op)))
+  (loop [caret caret idx 0 op op]
+    (if (< caret idx) ;; (<= ?)
+      caret
+      (let [sop (first op)
+            caret' (cond
+                     (= := (first sop)) caret
+                     (= :- (first sop)) (- caret (second sop))
+                     (= :+ (first sop)) (+ caret (count (second sop))))]
+        (recur caret' (+ idx (count-sop sop)) (rest op))))))
