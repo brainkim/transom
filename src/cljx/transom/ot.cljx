@@ -6,29 +6,29 @@
 
 (defn count-op
   [[o p]]
-  (match [o]
-    [:=] p
-    [:-] p 
-    [:+] (count p)))
+  (case o
+    := p
+    :- p 
+    :+ (count p)))
 
 (defn count-before
   [edit]
   (reduce
-    (fn [c op]
-      (match [op]
-        [[:= p]] (+ c p)
-        [[:- p]] (+ c p)
-        [[:+ p]] c))
+    (fn [c [o p]]
+      (case o
+        := (+ c p)
+        :- (+ c p)
+        :+ c))
     0 edit))
 
 (defn count-after
   [edit]
   (reduce
-    (fn [c op]
-      (match [op]
-        [[:= p]] (+ c p)
-        [[:- p]] c
-        [[:+ p]] (+ c (count p))))
+    (fn [c [o p]]
+      (case o
+        := (+ c p)
+        :- c
+        :+ (+ c (count p))))
     0 edit))
 
 (defn apply-edit
@@ -90,7 +90,7 @@
         :else
         (let [[o1 p1] op1
               [o2 p2] op2]
-          (condp = (compare p1 p2)
+          (case (compare p1 p2)
             -1 (recur (rest edit1)
                       (cons [o2 (- p2 p1)] (rest edit2))
                       (conj out [op1 [o2 p1]]))
@@ -142,7 +142,7 @@
         (let [[o1 p1] op1
               p1' (if (string? p1) (count p1) p1)
               [o2 p2] op2]
-          (condp = (compare p1' p2)
+          (case (compare p1' p2)
             -1
             (recur (rest edit1) (cons [o2 (- p2 p1')] (rest edit2))
                    (conj out [op1 [o2 p1']]))
@@ -179,12 +179,13 @@
   ;; caret is the little blinky line thing
   ;; index is where we are in the document
   (assert (<= caret (count-before edit)))
-  (loop [caret caret index 0 edit edit]
+  (loop [caret caret, index 0, edit edit]
     (if (<= caret index) ;; < ?
       caret
       (let [op (first edit)
-            caret' (cond
-                     (= := (first op)) caret
-                     (= :- (first op)) (- caret (second op))
-                     (= :+ (first op)) (+ caret (count (second op))))]
-        (recur caret' (+ index (count-op op)) (rest edit))))))
+            caret (case (first op)
+                    := caret
+                    :- (- caret (second op))
+                    :+ (+ caret (count (second op))))
+            index (+ index (count-op op))]
+        (recur caret index (rest edit))))))
