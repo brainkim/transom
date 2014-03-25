@@ -8,15 +8,12 @@
     (count-before edit) => 3
     (count-after edit)  => 5))
 
-(fact "apply-edit"
-  (apply-edit "abcd" [[:= 2] [:+ "xs"] [:= 2]]) => "abxscd"
-  (apply-edit "abcd" [[:- 4]]) => ""
-  (apply-edit "abxcd" [[:= 1] [:- 1] [:= 1] [:- 1] [:= 1]]) => "axd"
-  (apply-edit "abcd" [[:= 2] [:+ "f"] [:- 1]]) => (throws AssertionError))
-
-(fact "apply-edits"
-  (apply-edits "foobar" [[:= 3] [:+ "xs"] [:= 3]] [[:= 3] [:- 2] [:= 3]])
-    => "foobar")
+(fact "patch"
+  (patch "abcd" [[:= 2] [:+ "xs"] [:= 2]]) => "abxscd"
+  (patch "abcd" [[:- 4]]) => ""
+  (patch "abxcd" [[:= 1] [:- 1] [:= 1] [:- 1] [:= 1]]) => "axd"
+  (patch "abcd" [[:= 2] [:+ "f"] [:- 1]]) => (throws AssertionError)
+  (patch "foobar" [[:= 3] [:+ "xs"] [:= 3]] [[:= 3] [:- 2] [:= 3]]) => "foobar")
 
 (fact "pack packs operation"
   (pack [[:= 2] :nop [:= 3] [:+ "xs"] [:+ "y"] [:= 1] [:= 2]])
@@ -47,8 +44,8 @@
 (defn transform-helper
   [in op1 op2]
   (let [[op1' op2'] (transform op1 op2)]
-    (is (= (apply-edits in op1 op2')
-           (apply-edits in op2 op1')))))
+    (is (= (patch in op1 op2')
+           (patch in op2 op1')))))
 
 (deftest transform-test
   (transform-helper "food" [[:= 3] [:= 1]]
@@ -102,8 +99,8 @@
 (defn compose-helper 
   [in edit1 edit2]
   (let [composed-edit (compose edit1 edit2)]
-    (is (= (apply-edits in edit1 edit2)
-           (apply-edit in composed-edit)))))
+    (is (= (patch in edit1 edit2)
+           (patch in composed-edit)))))
 
 (deftest compose-test
   (is (= (compose [[:+ "foo"] [:= 3] [:- 2]]

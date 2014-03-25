@@ -8,7 +8,7 @@
   [[o p]]
   (case o
     := p
-    :- p 
+    :- p
     :+ (count p)))
 
 (defn count-before
@@ -31,22 +31,23 @@
         :+ (+ c (count p))))
     0 edit))
 
-(defn apply-edit
+(defn- patch*
   [doc edit]
-    (assert (= (count doc) (count-before edit))
-            (str "apply-edit: The length of the document (" (count doc) ") does"
-                 "not match the before-length of the edit (" (count-before edit)
-                 ")."))
-    (loop [doc doc, doc' nil, edit edit]
-      (match [edit]
-        [([] :seq)] (apply str doc')
-        [([[:= p] & r] :seq)] (recur (drop p doc) (concat doc' (take p doc)) r)
-        [([[:- p] & r] :seq)] (recur (drop p doc) doc' r)
-        [([[:+ p] & r] :seq)] (recur doc (concat doc' p) r))))
+  (assert (= (count doc) (count-before edit))
+          (str "patch: The length of the document (" (count doc) ") does not "
+               "match the length of the edit (" (count-before edit) ")."))
+  (loop [doc doc, doc' nil, edit edit]
+    (match [edit]
+      [([] :seq)] (apply str doc')
+      [([[:= p] & r] :seq)] (recur (drop p doc) (concat doc' (take p doc)) r)
+      [([[:- p] & r] :seq)] (recur (drop p doc) doc' r)
+      [([[:+ p] & r] :seq)] (recur doc (concat doc' p) r))))
 
-(defn apply-edits
+(defn patch
   [doc & edits]
-  (reduce apply-edit doc edits))
+  (reduce patch* doc edits))
+
+(patch "foobar" [[:= 3] [:- 3]])
 
 (defn reverse-pack
   [edit]

@@ -5,7 +5,8 @@
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [com.keminglabs/cljx "0.3.2"] 
                  [org.clojure/core.match "0.2.1"]]
-  :global-vars {*warn-on-reflection* true}
+  :plugins [[com.keminglabs/cljx "0.3.2"]]
+  :hooks [cljx.hooks]
   :profiles {:dev {:dependencies [[midje "1.4.0"]]
                    :plugins [[lein-midje "2.0.1"]]
                    :cljx {:builds [{:source-paths ["src/cljx"]
