@@ -4,13 +4,18 @@
   [s1 s2 [x y path]]
   (if (>= y (count s2))
     nil
-    [[x (inc y) (conj path [:+ (nth s2 y)])]]))
+    [x (inc y) (conj path [:+ (nth s2 y)])]))
 
 (defn- delete
   [s1 s2 [x y path]]
   (if (>= x (count s1))
     nil
-    [[(inc x) y (conj path [:- 1])]]))
+    [(inc x) y (conj path [:- 1])]))
+
+(defn- wrap
+  [node]
+  (when-let [node node]
+    [node]))
 
 (defn- snake
   [s1 s2 [x y path]]
@@ -23,16 +28,18 @@
           [x y path])))))
 
 (defn- choose
-  [s1 s2 [x1 y1 path1] [x2 y2 path2]]
+  [s1 s2 [x1 y1 :as node1] [x2 y2 :as node2]]
   (if (< (+ x1 y1) (+ x2 y2))
-    [x2 (inc y2) (conj path2 [:+ (nth s2 y2)])]
-    [(inc x1) y1 (conj path1 [:- 1])]))
+    (insert s1 s2 node2)
+    (delete s1 s2 node1)))
 
 (defn furthest
   [s1 s2 ks]
-  (let [f (insert s1 s2 (first ks))
-        ks' (map (partial apply (partial choose s1 s2)) (partition 2 1 ks))
-        l (delete s1 s2 (last ks))]
+  (let [f (wrap (insert s1 s2 (first ks)))
+        ks' (map (partial apply (comp (partial snake s1 s2)
+                                      (partial choose s1 s2)))
+                 (partition 2 1 ks))
+        l (wrap (delete s1 s2 (last ks)))]
     (concat f ks' l)))
 
 (defn diff
@@ -40,8 +47,8 @@
   (let [m (count s1)
         n (count s2)
         furthest* (partial furthest s1 s2)
-        initial [(snake s1 s2 [0 0 []])]
-        iteration (iterate furthest* initial)]
+        initial [(snake s1 s2 initial)]
+        iteration (take-while (comp not empty?) (iterate furthest* initial))]
     (loop [iter iteration]
       (when-let [current (first iter)] 
         (if-let [sink (first (filter (fn [[x y]] (and (= x m) (= y n)))
