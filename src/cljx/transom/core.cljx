@@ -1,8 +1,67 @@
-(ns transom.ot
-  (:require #+clj [clojure.core.match :refer [match]]
-                  [clojure.string :refer [join]])
+(ns transom.core
+  (:require #+clj
+            [clojure.core.match :refer [match]]
+            #+cljs
+            [cljs.core.match]
+            [clojure.string :refer [join]])
   #+cljs
   (:require-macros [cljs.core.match.macros :refer [match]]))
+
+(defn- insert
+  [s1 s2 [x y path]]
+  (if (>= y (count s2))
+    nil
+    [x (inc y) (conj path [:+ (nth s2 y)])]))
+
+(defn- delete
+  [s1 s2 [x y path]]
+  (if (>= x (count s1))
+    nil
+    [(inc x) y (conj path [:- 1])]))
+
+(defn- choose
+  [s1 s2 [x1 y1 :as node1] [x2 y2 :as node2]]
+  (if (< (+ x1 y1) (+ x2 y2))
+    (insert s1 s2 node2)
+    (delete s1 s2 node1)))
+
+(defn- wrap
+  [node]
+  (when-let [node node]
+    [node]))
+
+(defn- snake
+  [s1 s2 [x y path]]
+  (let [m (count s1), n (count s2)]
+    (loop [x x, y y, k 0]
+      (if (and (< x m) (< y n) (= (nth s1 x) (nth s2 y)))
+        (recur (inc x) (inc y) (inc k))
+        (if (> k 0)
+          [x y (conj path [:= k])]
+          [x y path])))))
+
+(defn- furthest
+  [s1 s2 ks]
+  (let [f (wrap (insert s1 s2 (first ks)))
+        ks' (map (partial apply (partial choose s1 s2))
+                 (partition 2 1 ks))
+        l (wrap (delete s1 s2 (last ks)))]
+    (map (partial snake s1 s2) (concat f ks' l))))
+
+(def ^:private initial-node [0 0 []])
+
+(defn diff
+  [s1 s2]
+  (let [m (count s1)
+        n (count s2)
+        furthest* (partial furthest s1 s2)
+        initial [(snake s1 s2 initial-node)]
+        iteration (take-while (comp not empty?) (iterate furthest* initial))]
+    (loop [iter iteration]
+      (when-let [current (first iter)]
+        (if-let [sink (first (filter (fn [[x y]] (and (= x m) (= y n))) current))]
+          (nth sink 2)
+          (recur (rest iter))))))) 
 
 (defn count-op
   [[o p]]
@@ -47,8 +106,6 @@
   [doc & edits]
   (reduce patch* doc edits))
 
-(patch "foobar" [[:= 3] [:- 3]])
-
 (defn reverse-pack
   [edit]
   (reduce
@@ -76,17 +133,13 @@
   (loop [edit1 edit1 edit2 edit2 out []]
     (let [op1 (first edit1) op2 (first edit2)]
       (cond
-        (nil? op1)
-        (concat out (map #(vector :nop %) edit2))
+        (nil? op1) (concat out (map #(vector :nop %) edit2))
 
-        (nil? op2)
-        (concat out (map #(vector % :nop) edit1))
+        (nil? op2) (concat out (map #(vector % :nop) edit1))
 
-        (= :+ (first op1))
-        (recur (rest edit1) edit2 (conj out [op1 :nop]))
+        (= :+ (first op1)) (recur (rest edit1) edit2 (conj out [op1 :nop]))
 
-        (= :+ (first op2))
-        (recur edit1 (rest edit2) (conj out [:nop op2]))
+        (= :+ (first op2)) (recur edit1 (rest edit2) (conj out [:nop op2]))
 
         :else
         (let [[o1 p1] op1
@@ -127,17 +180,13 @@
   (loop [edit1 edit1 edit2 edit2 out []]
     (let [op1 (first edit1) op2 (first edit2)]
       (cond
-        (nil? op1)
-        (concat out (map #(vector :nop %) edit2))
+        (nil? op1) (concat out (map #(vector :nop %) edit2))
 
-        (nil? op2)
-        (concat out (map #(vector % :nop) edit1))
+        (nil? op2) (concat out (map #(vector % :nop) edit1))
 
-        (= :- (first op1))
-        (recur (rest edit1) edit2 (conj out [op1 :nop]))
+        (= :- (first op1)) (recur (rest edit1) edit2 (conj out [op1 :nop]))
 
-        (= :+ (first op2))
-        (recur edit1 (rest edit2) (conj out [:nop op2]))
+        (= :+ (first op2)) (recur edit1 (rest edit2) (conj out [:nop op2]))
 
         :else
         (let [[o1 p1] op1

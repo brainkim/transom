@@ -1,13 +1,18 @@
-(ns transom.ot-test
-  (:require [clojure.test :refer :all]
+(ns transom.core-test
+  (:require #+clj
+            [clojure.test :refer :all]
+            #+clj
             [midje.sweet :refer :all]
-            [transom.ot :refer :all]))
+            #+clj
+            [transom.core :refer :all]))
 
 (fact "operations have correct before and after length"
   (let [edit [[:= 2] [:- 1] [:+ "foo"]]]
     (count-before edit) => 3
     (count-after edit)  => 5))
 
+#_(deftest patch-test
+  )
 (fact "patch"
   (patch "abcd" [[:= 2] [:+ "xs"] [:= 2]]) => "abxscd"
   (patch "abcd" [[:- 4]]) => ""
@@ -21,45 +26,27 @@
   (pack [[:= 2] [:= 1] [:= 0] :nop [:+ "xs"] :nop [:+ "y"] [:= 0] [:= 2]])
     => [[:= 3] [:+ "xsy"] [:= 2]])
 
-(fact "align-transform aligns two operations"
-  (align-transform [[:= 2] [:+ "xy"] [:= 2]]
-                   [[:= 1] [:- 2] [:= 1]])
-    => [[[:= 1] [:= 1]]
-        [[:= 1] [:- 1]]
-        [[:+ "xy"] :nop]
-        [[:= 1] [:- 1]]
-        [[:= 1] [:= 1]]]
-  (align-transform [[:= 2] [:+ "x"] [:- 2]]
-                   [[:= 2] [:+ "y"] [:- 2]])
-    => [[[:= 2]  [:= 2]]
-        [[:+ "x"] :nop]
-        [:nop [:+ "y"]]
-        [[:- 2]  [:- 2]]] 
-  (align-transform [[:+ "x"] [:= 3]]
-                   [[:= 3] [:+ "y"]])
-    => [[[:+ "x"] :nop]
-        [[:= 3] [:= 3]]
-        [:nop [:+ "y"]]])
+(deftest align-transform-test 
+  (is (= (align-transform [[:= 2] [:+ "xy"] [:= 2]] [[:= 1] [:- 2] [:+ "z"] [:= 1]])
+         [[[:= 1] [:= 1]]
+          [[:= 1] [:- 1]]
+          [[:+ "xy"] :nop]
+          [:nop [:+ "z"]]
+          [[:= 1] [:- 1]]
+          [[:= 1] [:= 1]]])))
 
 (defn transform-helper
   [in op1 op2]
   (let [[op1' op2'] (transform op1 op2)]
-    (is (= (patch in op1 op2')
-           (patch in op2 op1')))))
+    (is (= (patch in op1 op2') (patch in op2 op1')))))
 
 (deftest transform-test
-  (transform-helper "food" [[:= 3] [:= 1]]
-                           [[:= 1] [:= 3]])
-  (transform-helper "foo" [[:= 2] [:- 1]]
-                          [[:- 1] [:= 2]])
-  (transform-helper "grandpa" [[:- 2] [:= 5]]
-                              [[:= 5] [:- 2]])
-  (transform-helper "brian" [[:= 2] [:- 2] [:= 1]]
-                            [[:= 2] [:- 3]])
-  (transform-helper "fuck" [[:= 2] [:+ "foo"] [:= 2]]
-                           [[:+ "bar"] [:= 4]])
-  (transform-helper "pasta" [[:= 1] [:+ "izz"] [:- 3] [:= 1]]
-                            [[:- 1] [:= 4]]))
+  (transform-helper "food" [[:= 3] [:= 1]] [[:= 1] [:= 3]])
+  (transform-helper "foo" [[:= 2] [:- 1]] [[:- 1] [:= 2]])
+  (transform-helper "grandpa" [[:- 2] [:= 5]] [[:= 5] [:- 2]])
+  (transform-helper "brian" [[:= 2] [:- 2] [:= 1]] [[:= 2] [:- 3]])
+  (transform-helper "fuck" [[:= 2] [:+ "foo"] [:= 2]] [[:+ "bar"] [:= 4]])
+  (transform-helper "pasta" [[:= 1] [:+ "izz"] [:- 3] [:= 1]] [[:- 1] [:= 4]]))
 
 (deftest align-compose-test
   (is (= (align-compose [[:+ "foo"] [:= 5]]
