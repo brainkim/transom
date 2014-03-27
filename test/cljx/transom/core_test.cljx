@@ -1,38 +1,40 @@
 (ns transom.core-test
-  (:require #+clj
-            [clojure.test :refer :all]
-            #+clj
-            [midje.sweet :refer :all]
-            #+clj
+  #+clj
+  (:require [clojure.test :refer :all]
             [transom.core :refer :all]))
 
-(fact "operations have correct before and after length"
+(deftest count-test
   (let [edit [[:= 2] [:- 1] [:+ "foo"]]]
-    (count-before edit) => 3
-    (count-after edit)  => 5))
+    (are [x y] (= x y)
+      3 (count-before edit)
+      5 (count-after  edit))))
 
-#_(deftest patch-test
-  )
-(fact "patch"
-  (patch "abcd" [[:= 2] [:+ "xs"] [:= 2]]) => "abxscd"
-  (patch "abcd" [[:- 4]]) => ""
-  (patch "abxcd" [[:= 1] [:- 1] [:= 1] [:- 1] [:= 1]]) => "axd"
-  (patch "abcd" [[:= 2] [:+ "f"] [:- 1]]) => (throws AssertionError)
-  (patch "foobar" [[:= 3] [:+ "xs"] [:= 3]] [[:= 3] [:- 2] [:= 3]]) => "foobar")
+(deftest patch-test
+  (are [x y] (= x y)
+    "abxcd"
+    (patch "abcd" [[:= 2] [:+ "x"] [:= 2]])
+    ""
+    (patch "abcd" [[:- 4]])
+    "axd"
+    (patch "abxcd" [[:= 1] [:- 1] [:= 1] [:- 1] [:= 1]])
+    "foobar"
+    (patch "foobar" [[:= 3] [:+ "xs"] [:= 3]] [[:= 3] [:- 2] [:= 3]]))
+  (is (thrown? AssertionError (patch "abcd" [[:= 2] [:+ "f"] [:- 1]]))))
 
-(fact "pack packs operation"
-  (pack [[:= 2] :nop [:= 3] [:+ "xs"] [:+ "y"] [:= 1] [:= 2]])
-    => [[:= 5] [:+ "xsy"] [:= 3]]
-  (pack [[:= 2] [:= 1] [:= 0] :nop [:+ "xs"] :nop [:+ "y"] [:= 0] [:= 2]])
-    => [[:= 3] [:+ "xsy"] [:= 2]])
+(deftest pack-test
+  (are [x y] (= x y)
+    [[:= 5] [:+ "xsy"] [:= 3]]
+    (pack [[:= 2] :nop [:= 3] [:+ "xs"] [:+ "y"] [:= 1] [:= 2]])
+    [[:= 3] [:+ "xsy"] [:= 2]]
+    (pack [[:= 2] [:= 1] [:= 0] :nop [:+ "xs"] :nop [:+ "y"] [:= 0] [:= 2]])))
 
-(deftest align-transform-test 
+(deftest align-transform-test
   (is (= (align-transform [[:= 2] [:+ "xy"] [:= 2]] [[:= 1] [:- 2] [:+ "z"] [:= 1]])
          [[[:= 1] [:= 1]]
           [[:= 1] [:- 1]]
           [[:+ "xy"] :nop]
-          [:nop [:+ "z"]]
           [[:= 1] [:- 1]]
+          [:nop [:+ "z"]]
           [[:= 1] [:= 1]]])))
 
 (defn transform-helper
@@ -49,39 +51,24 @@
   (transform-helper "pasta" [[:= 1] [:+ "izz"] [:- 3] [:= 1]] [[:- 1] [:= 4]]))
 
 (deftest align-compose-test
-  (is (= (align-compose [[:+ "foo"] [:= 5]]
-                        [[:= 5] [:- 3]])
-         [[[:+ "foo"] [:= 3]]
-          [[:= 2] [:= 2]]
-          [[:= 3] [:- 3]]])) 
-
-  (is (= (align-compose [[:+ "foo"] [:= 5]]
-                        [[:= 2] [:- 6]])
-         [[[:+ "fo"] [:= 2]]
-          [[:+ "o"] [:- 1]]
-          [[:= 5] [:- 5]]]))
-
-  (is (= (align-compose [[:- 2] [:+ "bar"] [:= 3]]
-                        [[:+ "foo"] [:- 5] [:= 1]])
-         [[[:- 2] :nop]
-          [:nop [:+ "foo"]]
-          [[:+ "bar"] [:- 3]]
-          [[:= 2] [:- 2]]
-          [[:= 1] [:= 1]]]))
-
-  (is (= (align-compose [[:+ "foo"] [:= 3] [:- 2]]
-                        [[:= 3] [:+ "bar"] [:= 1] [:- 2]])
-         [[[:+ "foo"] [:= 3]]
-          [:nop [:+ "bar"]]
-          [[:= 1] [:= 1]]
-          [[:= 2] [:- 2]]
-          [[:- 2] :nop]]))
-
-  (is (= (align-compose [[:- 3] [:= 2]]
-                        [[:+ "foo"] [:- 2]])
-         [[[:- 3] :nop]
-          [:nop [:+ "foo"]]
-          [[:= 2] [:- 2]]])))
+  (are [x y] (= x y)
+    (align-compose [[:+ "foo"] [:= 5]]
+                   [[:= 5] [:- 3]])
+      [[[:+ "foo"] [:= 3]]
+       [[:= 2] [:= 2]]
+       [[:= 3] [:- 3]]]
+    (align-compose [[:+ "foo"] [:= 5]]
+                   [[:= 2] [:- 6]])
+      [[[:+ "fo"] [:= 2]]
+       [[:+ "o"] [:- 1]]
+       [[:= 5] [:- 5]]]
+    (align-compose [[:- 2] [:+ "bar"] [:= 3]]
+                   [[:+ "foo"] [:- 5] [:= 1]])
+      [[[:- 2] :nop]
+       [:nop [:+ "foo"]]
+       [[:+ "bar"] [:- 3]]
+       [[:= 2] [:- 2]]
+       [[:= 1] [:= 1]]]))
 
 (defn compose-helper 
   [in edit1 edit2]
@@ -94,7 +81,8 @@
                   [[:= 3] [:+ "bar"] [:- 2] [:= 1]]))
       [[:+ "foo"] [:+ "bar"] [:- 2] [:- 2] [:= 1]]))
 
-(fact "carets are transformed against operations"
-  (transform-caret 5 [[:+ "foo"] [:= 6]]) => 8
-  (transform-caret 5 [[:- 3] [:= 10]]) => 2
-  (transform-caret 5 [[:= 5] [:+ "foo"]]) => 5)
+(deftest transform-caret-test
+  (are [x y] (= x y)
+    8 (transform-caret 5 [[:+ "foo"] [:= 6]])
+    2 (transform-caret 5 [[:- 3] [:= 10]])
+    5 (transform-caret 5 [[:= 5] [:+ "foo"]])))

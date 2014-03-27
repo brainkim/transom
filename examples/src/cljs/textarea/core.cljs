@@ -19,8 +19,7 @@
   (aset @websocket* "onopen"    #(.send @websocket* (pr-str {:hello "world"})))
   (aset @websocket* "onclose"   #(println "close: chan"))
   (aset @websocket* "onerror"   #(println "error: " %))
-  (aset @websocket* "onmessage" #(let [data (.-data %)]
-                                   (println data))))
+  (aset @websocket* "onmessage" #(let [data (.-data %)] (println data))))
 
 (defn destroy-socket
   []

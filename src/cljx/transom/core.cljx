@@ -1,9 +1,9 @@
 (ns transom.core
-  (:require #+clj
+  (:require [clojure.string :refer [join]] 
+            #+clj
             [clojure.core.match :refer [match]]
             #+cljs
-            [cljs.core.match]
-            [clojure.string :refer [join]])
+            [cljs.core.match])
   #+cljs
   (:require-macros [cljs.core.match.macros :refer [match]]))
 
@@ -27,8 +27,7 @@
 
 (defn- wrap
   [node]
-  (when-let [node node]
-    [node]))
+  (when-let [node node] [node]))
 
 (defn- snake
   [s1 s2 [x y path]]
@@ -61,7 +60,7 @@
       (when-let [current (first iter)]
         (if-let [sink (first (filter (fn [[x y]] (and (= x m) (= y n))) current))]
           (nth sink 2)
-          (recur (rest iter))))))) 
+          (recur (rest iter)))))))
 
 (defn count-op
   [[o p]]
