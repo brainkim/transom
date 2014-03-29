@@ -7,6 +7,8 @@
                  [org.clojure/core.match "0.2.1"]]
   :plugins [[com.keminglabs/cljx "0.3.2"]]
   :hooks [cljx.hooks]
+
+  :main transom.core
   :source-paths ["src/cljx"]
   :test-paths ["target/test-classes"]
   :profiles {:dev
@@ -17,12 +19,11 @@
                              [compojure "1.1.6"]
                              [fogus/ring-edn "0.2.0"]
                              [http-kit "2.1.16"]]
-
-              :plugins [[lein-cljsbuild "1.0.2"]]
+              :plugins [[lein-cljsbuild "1.0.2"]
+                        [com.cemerick/austin "0.1.4"]]
 
               ;clj
               :source-paths ["examples/src/clj"]
-              :main textarea.core
               :jvm-opts ^:replace ["-Xmx1g" "-server"]
 
               :cljx

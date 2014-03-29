@@ -38,14 +38,19 @@
   (when-not (nil? @server*)
     (@server* :timeout 100)
     (reset! server* nil)
-    (println "Server stoppped!")
-    (println @server*)))
+    (println "Server stoppped!")))
 
 (defn start-server
   []
   (reset! server* (run-server #'app {:port 8000}))
   (println "Server started!")
   #(stop-server))
+
+(defn send-message
+  [message]
+  (let [message (pr-str message)]
+    (doseq [c @channels*]
+      (send! c message))))
 
 (defn -main
   []
