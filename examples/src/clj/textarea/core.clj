@@ -2,30 +2,30 @@
   (:require [ring.util.response :refer [file-response]]
             [ring.middleware.resource :refer [wrap-resource]]
             [ring.middleware.edn :refer [wrap-edn-params]]
-            [org.httpkit.server :refer :all]
-            [org.httpkit.timer]
-            [compojure.core :refer :all]
+            [org.httpkit.server :refer [run-server with-channel on-close on-receive send!]]
+            [compojure.core :refer [defroutes GET]]
             [compojure.route :as route]
-            [transom.core :as transom]))
+            [transom.core :as transom])
+  (:import java.lang.Runtime))
 
-(defonce server (atom nil))
+(defonce server*   (atom nil))
+(defonce channels* (atom #{}))
+(defonce document* (atom ""))
 
-(def channels (atom #{}))
-
-(defn sock [request]
+(defn web-socket [request]
   (with-channel request channel
     (on-close channel   (fn [status]
-                          (swap! channels disj channel)
+                          (swap! channels* disj channel)
                           (println "channel closed")
-                          (println @channels)))
+                          (println @channels*)))
     (on-receive channel (fn [data]
                           (println data)
-                          (swap! channels conj channel)
-                          (doseq [c @channels]
+                          (swap! channels* conj channel)
+                          (doseq [c @channels*]
                             (send! c data))))))
 
 (defroutes router
-  (GET "/ws" [] sock)
+  (GET "/ws" [] web-socket)
   (route/files "/" {:root "resources"})
   (route/not-found "¯\\_(ツ)_/¯"))
 
@@ -35,11 +35,18 @@
 
 (defn stop-server
   []
-  (when-not (nil? @server)
-    (@server :timeout 100)
-    (reset! server nil)))
+  (when-not (nil? @server*)
+    (@server* :timeout 100)
+    (reset! server* nil)
+    (println "Server stoppped!")
+    (println @server*)))
+
+(defn start-server
+  []
+  (reset! server* (run-server #'app {:port 8000}))
+  (println "Server started!")
+  #(stop-server))
 
 (defn -main
   []
-  (reset! server (run-server #'app {:port 8000}))
-  (println "Server started!"))
+  (.addShutdownHook (Runtime/getRuntime) (Thread. (start-server))))

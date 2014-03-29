@@ -38,7 +38,7 @@
 
               :cljsbuild
               {:builds [{:id "textarea"
-                         :source-paths ["target/src"
+                         :source-paths ["target/classes"
                                         "examples/src/cljs"]
                          :compiler {:output-to "resources/main.js"
                                     :output-dir "resources/out"
