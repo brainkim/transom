@@ -151,6 +151,10 @@
 
 (defn compose
   [edit1 edit2]
+  (assert (= (count-after edit1) (count-before edit2))
+          (str "The after-length of the first edit (" (count-after edit1) ") "
+               "does not match the before-length of the second edit ("
+               (count-before edit2) ")."))
   (pack
     (reduce (fn [out [op1 op2]]
               (match [op1 op2]
@@ -184,7 +188,9 @@
             index (+ index (count-op op))]
         (recur caret index (rest edit))))))
 
-#_(defprotocol Editable
+(comment
+
+(defprotocol Editable
   (diff [this that])
   (patch [this & edits]))
 
@@ -221,24 +227,28 @@
           [x y path])))))
 
 (defn- furthest
-  [s1 s2 ks]
-  (let [f (wrap (insert s1 s2 (first ks)))
-        ks' (map (partial apply (partial choose s1 s2))
-                 (partition 2 1 ks))
-        l (wrap (delete s1 s2 (last ks)))]
-    (map (partial snake s1 s2) (concat f ks' l))))
+  [s1 s2 choice-fn nodes]
+  (let [f (wrap (insert s1 s2 (first nodes)))
+        nodes' (map choice-fn (partition 2 1 nodes))
+        l (wrap (delete s1 s2 (last nodes)))]
+    (concat f nodes' l)))
 
 (def ^:private initial-node [0 0 []])
 
+;; This is so horribly slow ;_;
 (defn diff
   [a b]
   (let [m (count a)
         n (count b)
-        furthest* (partial furthest a b)
-        initial [(snake a b initial-node)]
+        choose* (partial apply (partial choose a b))
+        furthest* (partial furthest a b choose*)
+        snake* (partial snake a b)
+        initial [(snake* initial-node)]
         iteration (iterate furthest* initial)]
     (loop [iter iteration]
       (when-let [current (first iter)]
-        (if-let [sink (first (filter (fn [[x y]] (and (= x m) (= y n))) current))]
-          (pack (nth sink 2))
-          (recur (rest iter)))))))
+        (let [current (map snake* current)]
+          (if-let [sink (first (filter (fn [[x y]] (and (= x m) (= y n))) current))]
+            (pack (nth sink 2))
+            (recur (rest iter))))))))
+  )

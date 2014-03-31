@@ -18,12 +18,14 @@
                              [ring/ring "1.2.1"]
                              [compojure "1.1.6"]
                              [fogus/ring-edn "0.2.0"]
-                             [http-kit "2.1.16"]]
+                             [http-kit "2.1.16"]
+                             [org.clojure/test.check "0.5.7"]
+                             [criterium "0.4.3"]]
               :plugins [[lein-cljsbuild "1.0.2"]
                         [com.cemerick/austin "0.1.4"]]
 
               ;clj
-              :source-paths ["examples/src/clj"]
+              :source-paths ["examples/clj"]
               :jvm-opts ^:replace ["-Xmx1g" "-server"]
 
               :cljx
@@ -33,14 +35,14 @@
                         {:source-paths ["src/cljx"]
                          :output-path "target/classes"
                          :rules :cljs}
-                        {:source-paths ["test/cljx"]
+                        {:source-paths ["test"]
                          :output-path "target/test-classes"
                          :rules :clj}]}
 
               :cljsbuild
               {:builds [{:id "textarea"
                          :source-paths ["target/classes"
-                                        "examples/src/cljs"]
+                                        "examples/cljs"]
                          :compiler {:output-to "resources/main.js"
                                     :output-dir "resources/out"
                                     :source-map true

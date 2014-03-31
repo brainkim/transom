@@ -1,4 +1,4 @@
-(ns textarea.core
+(ns transom.textarea.core
   (:require [ring.util.response :refer [file-response]]
             [ring.middleware.resource :refer [wrap-resource]]
             [ring.middleware.edn :refer [wrap-edn-params]]
@@ -12,6 +12,12 @@
 (defonce channels* (atom #{}))
 (defonce document* (atom ""))
 
+(defn send-all
+  [message]
+  (let [message (pr-str message)]
+    (doseq [c @channels*]
+      (send! c message))))
+
 (defn web-socket [request]
   (with-channel request channel
     (on-close channel   (fn [status]
@@ -20,9 +26,9 @@
                           (println @channels*)))
     (on-receive channel (fn [data]
                           (println data)
-                          (swap! channels* conj channel)
-                          (doseq [c @channels*]
-                            (send! c data))))))
+                          (let [data (read-string data)]
+                            (swap! channels* conj channel)
+                            (send-all data))))))
 
 (defroutes router
   (GET "/ws" [] web-socket)
@@ -46,11 +52,6 @@
   (println "Server started!")
   #(stop-server))
 
-(defn send-message
-  [message]
-  (let [message (pr-str message)]
-    (doseq [c @channels*]
-      (send! c message))))
 
 (defn -main
   []
