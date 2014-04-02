@@ -50,23 +50,29 @@
   [doc & edits]
   (reduce patch* doc edits))
 
-(defn reverse-pack
-  [edit]
-  (reduce
-    (fn [edit' op]
-      (let [op' (first edit')]
-        (match [op' op]
-          [_ [_ 0]] edit'
-          [_ :nop] edit'
-          [[:= p'] [:= p]] (cons [:= (+ p p')] (rest edit'))
-          [[:- p'] [:- p]] (cons [:- (+ p p')] (rest edit'))
-          [[:+ p'] [:+ p]] (cons [:+ (str p p')] (rest edit'))
-          :else (cons op edit'))))
-    [] edit))
-
 (defn pack
   [edit]
-  (reverse-pack (reverse edit)))
+  (letfn [(nop?
+            [op]
+            (or (= op :nop) (= (second op) 0) (= (second op) "")))
+          (combinable?
+            [[o1] [o2]]
+            (= o1 o2))
+          (combine
+            [op1 op2]
+            (match [op1 op2]
+              [[:= p1] [:= p2]] [:= (+ p1 p2)]
+              [[:- p1] [:- p2]] [:- (+ p1 p2)]
+              [[:+ p1] [:+ p2]] [:+ (str p1 p2)]))
+          (reducer
+           [[pop edit' :as prev] cop]
+           (cond
+             (nop? cop) prev
+             (nil? pop) [cop edit']
+             (combinable? pop cop) [(combine pop cop) edit']
+             :else [cop (conj edit' pop)]))]
+    (let [[pop edit'] (reduce reducer [nil []] edit)]
+      (if (nil? pop) edit' (conj edit' pop)))))
 
 (defn pack-pairs
   [pairs]
@@ -189,11 +195,6 @@
         (recur caret index (rest edit))))))
 
 (comment
-
-(defprotocol Editable
-  (diff [this that])
-  (patch [this & edits]))
-
 (defn- insert
   [s1 s2 [x y path]]
   (if (>= y (count s2))
