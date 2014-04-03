@@ -43,12 +43,24 @@
     (is (= (patch in op1 op2') (patch in op2 op1')))))
 
 (deftest transform-test
-  (transform-helper "food" [[:= 3] [:= 1]] [[:= 1] [:= 3]])
-  (transform-helper "foo" [[:= 2] [:- 1]] [[:- 1] [:= 2]])
-  (transform-helper "grandpa" [[:- 2] [:= 5]] [[:= 5] [:- 2]])
-  (transform-helper "brian" [[:= 2] [:- 2] [:= 1]] [[:= 2] [:- 3]])
-  (transform-helper "fuck" [[:= 2] [:+ "foo"] [:= 2]] [[:+ "bar"] [:= 4]])
-  (transform-helper "pasta" [[:= 1] [:+ "izz"] [:- 3] [:= 1]] [[:- 1] [:= 4]]))
+  (transform-helper "food"
+                    [[:= 3] [:= 1]]
+                    [[:= 1] [:= 3]])
+  (transform-helper "foo"
+                    [[:= 2] [:- 1]]
+                    [[:- 1] [:= 2]])
+  (transform-helper "grandpa"
+                    [[:- 2] [:= 5]]
+                    [[:= 5] [:- 2]])
+  (transform-helper "brian"
+                    [[:= 2] [:- 2] [:= 1]]
+                    [[:= 2] [:- 3]])
+  (transform-helper "fuck"
+                    [[:= 2] [:+ "foo"][:= 2]]
+                    [[:+ "bar"] [:= 4]])
+  (transform-helper "pasta"
+                    [[:= 1] [:+ "izz"] [:- 3] [:= 1]]
+                    [[:- 1] [:= 4]]))
 
 (deftest align-compose-test
   (are [x y] (= x y)
@@ -69,12 +81,6 @@
        [[:+ "bar"] [:- 3]]
        [[:= 2] [:- 2]]
        [[:= 1] [:= 1]]]))
-
-(defn compose-helper 
-  [in edit1 edit2]
-  (let [composed-edit (compose edit1 edit2)]
-    (is (= (patch in edit1 edit2)
-           (patch in composed-edit)))))
 
 (deftest compose-test
   (is (= (compose [[:+ "foo"] [:= 3] [:- 2]]
