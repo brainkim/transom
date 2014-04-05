@@ -7,12 +7,10 @@
                  [org.clojure/core.match "0.2.1"]]
   :plugins [[com.keminglabs/cljx "0.3.2"]]
   :hooks [cljx.hooks]
-
-  :main transom.core
   :source-paths ["src/cljx"]
   :test-paths ["target/test-classes"]
   :profiles {:dev
-             {:dependencies [[org.clojure/clojurescript "0.0-2173"]
+             {:dependencies [[org.clojure/clojurescript "0.0-2199"]
                              [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
                              [om "0.5.3"]
                              [ring/ring "1.2.1"]
@@ -21,12 +19,15 @@
                              [http-kit "2.1.16"]
                              [org.clojure/test.check "0.5.7"]
                              [criterium "0.4.3"]]
-              :plugins [[lein-cljsbuild "1.0.2"]
+              :plugins [[lein-cljsbuild "1.0.3"]
                         [com.cemerick/austin "0.1.4"]]
 
               ;clj
-              :source-paths ["examples/clj"]
-              :jvm-opts ^:replace ["-Xmx1g" "-server"]
+              :source-paths ["examples/clj" "dev"]
+              :jvm-opts ^:replace ["-server"
+                                   ;;"-Xms3072m"
+                                   ;;"-Xmx3072m"
+                                   "-Xmx1g"]
 
               :cljx
               {:builds [{:source-paths ["src/cljx"]
