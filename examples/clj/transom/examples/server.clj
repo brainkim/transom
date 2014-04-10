@@ -10,6 +10,25 @@
             [com.stuartsierra.component :as component])
   (:gen-class))
 
+(defprotocol IDocument
+  (value [this])
+  (patch-doc [this edit last-version]))
+(deftype Document [value edits version]
+  IDocument
+  (value [this] value)
+  (patch-doc [this new-edit last-version]
+    (let [edit'
+          (if (< last-version version)
+            (reduce (fn [edit' edit] (first (transom/transform edit' edit)))
+                    new-edit
+                    (subvec edits (- version last-version)))
+            new-edit)
+          value (transom/patch value edit')
+          edits (conj edits edit')
+          version (inc version)]
+      (Document. value edits version))))
+
+
 (defonce server! (atom nil))
 (defonce channels! (atom #{}))
 (def killer (chan))

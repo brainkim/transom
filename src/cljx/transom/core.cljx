@@ -37,7 +37,9 @@
 (defn patch
   ([doc edit]
    (assert (= (count doc) (count-before edit))
-           "Length of document and length of edit do not match")
+           (str "transom/patch: length mismatch" \newline
+                "Doc: " doc \newline
+                "Edit: " edit))
    (loop [doc doc, edit edit, out nil]
      (if (empty? edit)
        (apply str out)
@@ -102,7 +104,10 @@
 
 (defn transform
   [edit1 edit2]
-  (assert (= (count-before edit1) (count-before edit2)) "length mismatch!")
+  (assert (= (count-before edit1) (count-before edit2))
+          (str "transom/transform: length mismatch" \newline
+               "Edit 1:" edit1 \newline
+               "Edit 2:" edit2))
   (letfn
     [(compare-ops
        [out [op1 op2]]
@@ -146,7 +151,8 @@
 
 (defn compose
   ([edit1 edit2]
-   (assert (= (count-after edit1) (count-before edit2)) "length mismatch!")
+   (assert (= (count-after edit1) (count-before edit2))
+           "transom/compose: length mismatch")
    (letfn
      [(compare-ops
         [out [op1 op2]]

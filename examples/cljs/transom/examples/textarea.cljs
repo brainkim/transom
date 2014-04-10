@@ -5,6 +5,7 @@
             [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
             [transom.core :as transom]
+            [transom.document :as document]
             [goog.dom :as gdom]
             [goog.dom.selection :as selection]
             [goog.events :refer [listen]]
@@ -12,9 +13,13 @@
   (:import (goog.net WebSocket)))
 (enable-console-print!)
 
-(defn host
-  []
-  (.. js/window -location -host)) 
+(defn host [] (.. js/window -location -host))
+
+(defn x-ray
+  [data owner]
+  (om/component
+    (dom/pre nil
+      (pr-str data))))
 
 (defn app
   [data owner]
@@ -22,22 +27,22 @@
             (let [message (.. e -target -value)]
               (om/update! data [:doc] message)))]
     (reify
-      om/IWillUpdate
-      (will-update [_ props state]
-        (let [node (.. owner -refs -textarea getDOMNode)]
+      om/IDidUpdate
+      (did-update [_ props state]
+        (let [node (om/get-node owner "textarea")]
           (selection/setStart node 0)
           (selection/setEnd node 0)))
       om/IRender
       (render [_]
         (dom/div nil
-          (dom/textarea #js {:disabled (nil? (:version data))
+          (om/build x-ray data)
+          (dom/textarea #js {:disabled (nil? (:id data))
                              :value (:doc data)
                              :ref "textarea"
                              :autoFocus true
                              :rows 50
                              :cols 80
-                             :onChange change}
-          (dom/div nil (str "Data: " (pr-str data)))))))))
+                             :onChange change}))))))
 
 (defn diff
   [a b]
@@ -71,28 +76,54 @@
     (rand-nth chars)))
 
 (defn rand-edit
-  [doc]
+  [doc-string]
   (transom/pack
-    (let [doc-len (count doc)
+    (let [doc-len (count doc-string)
           entry (rand-int doc-len)]
       [[:= entry]
        [:+ "pizza"]
        [:= (- doc-len entry)]])))
 
+(defn pizza-edit
+  [doc-string]
+  (transom/pack
+    [[:= (count doc-string)]
+     [:+ "pizza"]]))
+
+(defn start-edit
+  [doc-string]
+  [[:+ (take 5 (repeatedly rand-char))]
+   [:= (count doc-string)]])
+
+(defn end-edit
+  [doc-string]
+  [[:= (count doc-string)]
+   [:+ (take 5 (repeatedly rand-char))]])
+
 (defn mocksocket
-  [in out ws]
-  (go-loop []
-    (println (<! out))
-    (recur))
-  #_(go-loop [doc "" version 0]
-    (<! (timeout 1500))
-    (let [edit (rand-edit doc)
-          doc (transom/patch doc edit)]
-      (>! in {:type :edit
-              :id :FUCK_YOU
-              :edit edit
-              :version version})
-      (recur doc (inc version)))))
+  [in out _]
+  (let [state (atom (document/document))]
+    (go-loop []
+      (<! (timeout 5000))
+      (swap! state
+             (fn [doc]
+               (let [edit (start-edit (document/value doc))
+                     doc (document/patch doc edit)
+                     version (document/version doc)]
+                 (put! in {:type :edit :id :FUCK_YOU :edit edit :version version})
+                 doc)))
+      (recur))
+    (go-loop []
+      (let [{:keys [edit version]} (<! out)]
+        (<! (timeout 10000))
+        (swap! state
+               (fn [doc]
+                 (let [edit (document/transform-edit doc edit version)
+                       doc  (document/patch doc edit)
+                       version (document/version doc)]
+                   (put! in {:type :edit :id 0 :edit edit :version version})
+                   doc))))
+      (recur))))
 
 (defn websocket
   [in out ws]
@@ -119,47 +150,54 @@
     (.close ws)))
 
 (defn controller
-  [in out out* app-state! stage!]
+  [in out conn app-state! stage!]
   (go-loop []
     (alt!
       in
       ([message]
-        (println @stage!)
-        (if (not= (:id message) (:id @app-state!))
-          (let [{:keys [pending buffer]} @stage!
-                {:keys [version edit]} message]
-            (if (nil? pending)
-              (swap! app-state!
-                     #(merge {:doc (transom/patch (:doc %) edit)
-                              :version version}))
-              (let [[pending' edit'] (transom/transform pending edit)]
-                (if (nil? buffer)
-                  (do 
-                    (swap! stage! assoc :pending pending')
-                    (swap! app-state!
-                           #(merge {:doc (transom/patch (:doc %) edit')
-                                    :version version})))
-                  (let [[buffer' edit''] (transom/transform buffer edit')]
-                    (do
-                      (swap! stage! merge {:pending pending' :buffer buffer'})
+        (let [{:keys [edit version id]} message]
+          (if (not= id 0)
+            ;; external edit
+            (let [{:keys [pending buffer]} @stage!]
+              (swap! stage! assoc :version version)
+              (if (nil? pending)
+                (swap! app-state! #(merge % {:doc (transom/patch (:doc %) edit)}))
+                (let [[pending' edit'] (transom/transform pending edit)]
+                  (if (nil? buffer)
+                    (do 
+                      (swap! stage! assoc :pending pending')
                       (swap! app-state!
-                             #(merge {:doc (transom/patch (:doc %) edit'')
-                                      :version version})))))))))
+                             #(merge % {:doc (transom/patch (:doc %) edit')})))
+                    (let [[buffer' edit''] (transom/transform buffer edit')]
+                      (do
+                        (swap! stage! merge {:pending pending' :buffer buffer'})
+                        (swap! app-state!
+                               #(merge % {:doc (transom/patch (:doc %) edit'')}))))))))
+            ;; ack
+            (swap! stage!
+              (fn [{:keys [pending buffer] :as stage}]
+                (if (nil? buffer)
+                  {:pending nil :buffer nil :version version}
+                  (do
+                    (put! conn {:edit buffer :version version})
+                    {:pending buffer :buffer nil :version version}))))))
         (recur))
       out
-      ([message]
-        (let [{:keys [edit]} message]
-          (swap! stage! (fn [{:keys [pending buffer]}]
+      ([edit]
+        (swap! stage!
+               (fn [{:keys [pending buffer version]}]
                  (if (nil? pending)
                    (do
-                     (put! out* edit)
-                     {:pending edit
-                      :buffer nil})
+                     ;; immediately send message
+                     (put! conn {:edit edit :version version})
+                     {:pending edit :buffer nil :version version})
+                   ;; pending message
                    (if (nil? buffer)
+                     {:pending pending :buffer edit :version version}
+                     ;; buffer is full
                      {:pending pending
-                      :buffer edit}
-                     {:pending pending
-                      :buffer (transom/compose buffer edit)})))))
+                      :buffer (transom/compose buffer edit)
+                      :version version}))))
         (recur)))))
 
 (defn -main
@@ -167,20 +205,18 @@
   (letfn [(patch-doc
             [app-state edit]
             (assoc-in app-state :doc (transom/patch (:doc app-state) edit)))]
-    (let [app-state! (atom {:doc "" :id nil :version 0})
-          stage! (atom {:pending nil :buffer nil})
+    (let [app-state! (atom {:doc "" :id 0})
+          stage! (atom {:pending nil :buffer nil :version nil})
           in (chan)
-          out (chan) out* (chan)]
-      (mocksocket in out* (WebSocket. false))
+          out (chan)
+          out* (chan)]
+      (mocksocket in out* nil)
       (controller in out out* app-state! stage!)
       (om/root app
-        app-state!
-        {:target (gdom/getElement "app")
-         :tx-listen
-         (fn [{:keys [old-value new-value path]} cursor]
-           (let [{:keys [id version]} @app-state!]
-             (put! out {:type :edit
-                        :id id
-                        :path path
-                        :edit (diff old-value new-value)})))}))))
+               app-state!
+               {:target (gdom/getElement "app")
+                :tx-listen
+                (fn [{:keys [old-value new-value path]} cursor]
+                  (put! out (diff old-value new-value)))})
+      (om/root x-ray stage! {:target (gdom/getElement "xray")}))))
 (-main)
