@@ -3,32 +3,33 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.5.1"]
+                 [org.clojure/clojurescript "0.0-2202"]
                  [com.keminglabs/cljx "0.3.2"]
-                 [org.clojure/core.match "0.2.1"]]
-  :plugins [[com.keminglabs/cljx "0.3.2"]]
+                 [org.clojure/core.match "0.2.1"]
+                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]]
   :hooks [cljx.hooks]
   :source-paths ["src/cljx"]
-  :test-paths ["target/test-classes"]
+  :test-paths ["target/test-classes"
+               "test"]
   :profiles {:dev
-             {:dependencies [[org.clojure/clojurescript "0.0-2199"]
-                             [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
-                             [om "0.5.3"]
+             {:dependencies [[om "0.5.3"]
                              [ring/ring "1.2.1"]
                              [compojure "1.1.6"]
                              [fogus/ring-edn "0.2.0"]
                              [http-kit "2.1.16"]
-                             [org.clojure/test.check "0.5.7"]
-                             [criterium "0.4.3"]]
+                             [com.stuartsierra/component "0.2.1"]
+                             [com.cemerick/clojurescript.test "0.3.0"]
+                             [com.cemerick/double-check "0.5.7-SNAPSHOT"]]
               :plugins [[lein-cljsbuild "1.0.3"]
+                        [com.keminglabs/cljx "0.3.2"]
                         [com.cemerick/austin "0.1.4"]]
-
               ;clj
-              :source-paths ["examples/clj" "dev"]
+              :repl-options {:nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
+              :source-paths ["examples/clj"]
               :jvm-opts ^:replace ["-server"
                                    ;;"-Xms3072m"
                                    ;;"-Xmx3072m"
                                    "-Xmx1g"]
-
               :cljx
               {:builds [{:source-paths ["src/cljx"]
                          :output-path "target/classes"
@@ -39,12 +40,13 @@
                         {:source-paths ["test"]
                          :output-path "target/test-classes"
                          :rules :clj}]}
-
               :cljsbuild
               {:builds [{:id "textarea"
                          :source-paths ["target/classes"
-                                        "examples/cljs"]
+                                        "examples/cljs"
+                                        "test"]
                          :compiler {:output-to "resources/main.js"
                                     :output-dir "resources/out"
                                     :source-map true
+                                    :libs [""] ;; grumble grumble
                                     :optimizations :none}}]}}})

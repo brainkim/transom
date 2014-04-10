@@ -106,8 +106,8 @@
   [edit1 edit2]
   (assert (= (count-before edit1) (count-before edit2))
           (str "transom/transform: length mismatch" \newline
-               "Edit 1:" edit1 \newline
-               "Edit 2:" edit2))
+               "Edit 1: " edit1 \newline
+               "Edit 2: " edit2))
   (letfn
     [(compare-ops
        [out [op1 op2]]
@@ -152,7 +152,9 @@
 (defn compose
   ([edit1 edit2]
    (assert (= (count-after edit1) (count-before edit2))
-           "transom/compose: length mismatch")
+           (str "transom/compose: length mismatch" \newline
+                "Edit 1: " edit1 \newline
+                "Edit 2: " edit2))
    (letfn
      [(compare-ops
         [out [op1 op2]]

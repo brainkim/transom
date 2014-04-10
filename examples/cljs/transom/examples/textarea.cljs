@@ -5,6 +5,7 @@
             [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
             [transom.core :as transom]
+            [transom.diff :refer [diff]]
             [transom.document :as document]
             [goog.dom :as gdom]
             [goog.dom.selection :as selection]
@@ -13,7 +14,9 @@
   (:import (goog.net WebSocket)))
 (enable-console-print!)
 
-(defn host [] (.. js/window -location -host))
+(defn host
+  []
+  (.. js/window -location -host))
 
 (defn x-ray
   [data owner]
@@ -30,8 +33,7 @@
       om/IDidUpdate
       (did-update [_ props state]
         (let [node (om/get-node owner "textarea")]
-          (selection/setStart node 0)
-          (selection/setEnd node 0)))
+          nil))
       om/IRender
       (render [_]
         (dom/div nil
@@ -43,32 +45,6 @@
                              :rows 50
                              :cols 80
                              :onChange change}))))))
-
-(defn diff
-  [a b]
-  (let [a-len (count a)
-        b-len (count b)]
-    (letfn
-      [(common-prefix [a b]
-         (loop [i 0]
-           (if (and (< i a-len) (< i b-len) (= (.charAt a i) (.charAt b i)))
-             (recur (inc i))
-             i)))
-       (common-suffix [a b]
-         (loop [i 0]
-           (if (and (< i a-len) (< i b-len)
-                    (= (.charAt a (- a-len i 1)) (.charAt b (- b-len i 1))))
-             (recur (inc i))
-             i)))]
-      (if (= a b)
-        [:= a-len]
-        (let [pre (common-prefix a b)
-              a' (subs a pre)
-              suf (common-suffix a' b)]
-          (transom/pack [[:= pre]
-                         [:- (- a-len pre suf)]
-                         [:+ (subs b pre (- b-len suf))]
-                         [:= suf]]))))))
 
 (defn rand-char
   []
@@ -84,15 +60,9 @@
        [:+ "pizza"]
        [:= (- doc-len entry)]])))
 
-(defn pizza-edit
+(defn start-pizza
   [doc-string]
-  (transom/pack
-    [[:= (count doc-string)]
-     [:+ "pizza"]]))
-
-(defn start-edit
-  [doc-string]
-  [[:+ (take 5 (repeatedly rand-char))]
+  [[:+ "pizza"]
    [:= (count doc-string)]])
 
 (defn end-edit
@@ -103,11 +73,11 @@
 (defn mocksocket
   [in out _]
   (let [state (atom (document/document))]
-    (go-loop []
+    #_(go-loop []
       (<! (timeout 5000))
       (swap! state
              (fn [doc]
-               (let [edit (start-edit (document/value doc))
+               (let [edit (start-pizza (document/value doc))
                      doc (document/patch doc edit)
                      version (document/version doc)]
                  (put! in {:type :edit :id :FUCK_YOU :edit edit :version version})
@@ -115,7 +85,7 @@
       (recur))
     (go-loop []
       (let [{:keys [edit version]} (<! out)]
-        (<! (timeout 10000))
+        (<! (timeout 5000))
         (swap! state
                (fn [doc]
                  (let [edit (document/transform-edit doc edit version)
@@ -217,6 +187,7 @@
                {:target (gdom/getElement "app")
                 :tx-listen
                 (fn [{:keys [old-value new-value path]} cursor]
+                  (println (diff old-value new-value))
                   (put! out (diff old-value new-value)))})
       (om/root x-ray stage! {:target (gdom/getElement "xray")}))))
 (-main)
