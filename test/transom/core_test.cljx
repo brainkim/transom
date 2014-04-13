@@ -28,15 +28,6 @@
     [[:= 3] [:+ "xsy"] [:= 2]]
     (pack [[:= 2] [:= 1] [:= 0] :nop [:+ "xs"] :nop [:+ "y"] [:= 0] [:= 2]])))
 
-(deftest align-transform-test
-  (is (= (align-transform [[:= 2] [:+ "xy"] [:= 2]] [[:= 1] [:- 2] [:+ "z"] [:= 1]])
-         [[[:= 1] [:= 1]]
-          [[:= 1] [:- 1]]
-          [[:+ "xy"] :nop]
-          [[:= 1] [:- 1]]
-          [:nop [:+ "z"]]
-          [[:= 1] [:= 1]]])))
-
 (defn transform-helper
   [in op1 op2]
   (let [[op1' op2'] (transform op1 op2)]
@@ -62,26 +53,6 @@
                     [[:= 1] [:+ "izz"] [:- 3] [:= 1]]
                     [[:- 1] [:= 4]]))
 
-(deftest align-compose-test
-  (are [x y] (= x y)
-    (align-compose [[:+ "foo"] [:= 5]]
-                   [[:= 5] [:- 3]])
-      [[[:+ "foo"] [:= 3]]
-       [[:= 2] [:= 2]]
-       [[:= 3] [:- 3]]]
-    (align-compose [[:+ "foo"] [:= 5]]
-                   [[:= 2] [:- 6]])
-      [[[:+ "fo"] [:= 2]]
-       [[:+ "o"] [:- 1]]
-       [[:= 5] [:- 5]]]
-    (align-compose [[:- 2] [:+ "bar"] [:= 3]]
-                   [[:+ "foo"] [:- 5] [:= 1]])
-      [[[:- 2] :nop]
-       [:nop [:+ "foo"]]
-       [[:+ "bar"] [:- 3]]
-       [[:= 2] [:- 2]]
-       [[:= 1] [:= 1]]]))
-
 (deftest compose-test
   (is (= (compose [[:+ "foo"] [:= 3] [:- 2]]
                   [[:= 3] [:+ "bar"] [:- 2] [:= 1]]))
@@ -91,4 +62,4 @@
   (are [x y] (= x y)
     8 (transform-caret 5 [[:+ "foo"] [:= 6]])
     2 (transform-caret 5 [[:- 3] [:= 10]])
-    5 (transform-caret 5 [[:= 5] [:+ "foo"]])))
+    8 (transform-caret 5 [[:= 5] [:+ "foo"]])))

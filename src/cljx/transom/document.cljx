@@ -31,6 +31,3 @@
     (document initial []))
   ([current history]
     (->Document current history)))
-
-(def pizza (document "pizza" [[[:+ "pasta"]] [[:= 1] [:- 4]] [[:= 1] [:+ "izza"]]]))
-(transform-edit pizza [[:+ "pesto"]] 0)

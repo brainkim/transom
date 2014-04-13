@@ -10,14 +10,14 @@
             [com.stuartsierra.component :as component])
   (:gen-class))
 
-(defonce server! (atom nil))
-(defonce channels! (atom #{}))
+(defonce !server (atom nil))
+(defonce !channels (atom #{}))
 (def killer (chan))
 (def inbox (chan))
 
 (defn web-socket [request]
   (with-channel request c
-    (on-close c (fn [status] (swap! channels! disj c)))
+    (on-close c (fn [status] (swap! !channels disj c)))
     (on-receive c (fn [data] (put! inbox [(read-string data) c])))))
 
 (defn app
@@ -26,20 +26,6 @@
               (route/files "/" {:root "resources"})
               (route/not-found "¯\\_(ツ)_/¯"))
       wrap-edn-params))
-(defn rand-char
-  []
-  (let [chars (map char (concat (range 48 58) (range 66 92) (range 97 123)))]
-    (rand-nth chars)))
-
-(defn rand-edit
-  [doc]
-  (transom/pack
-    (let [doc-len (count doc)
-          entry (rand-int doc-len)
-          edit-delta (inc (rand-int 5))]
-      [[:= entry]
-       [:+ (apply str (repeatedly edit-delta rand-char))]
-       [:= (- (count doc) entry)]])))
 
 (defn send-all!
   [message]
@@ -89,21 +75,6 @@
           (send-all! data)
           (recur))))
     (reset! server! (run-server (app) {:port 8000}))))
-
-(defn rand-char
-  []
-  (let [chars (map char (concat (range 48 58) (range 66 92) (range 97 123)))]
-    (rand-nth chars)))
-
-(defn rand-edit
-  [doc]
-  (transom/pack
-    (let [doc-len (count doc)
-          entry (rand-int doc-len)
-          edit-delta (inc (rand-int 5))]
-      [[:= entry]
-       [:+ (apply str (repeatedly edit-delta rand-char))]
-       [:= (- (count doc) entry)]])))
 
 (defn -main
   []

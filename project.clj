@@ -9,8 +9,7 @@
                  [org.clojure/core.async "0.1.278.0-76b25b-alpha"]]
   :hooks [cljx.hooks]
   :source-paths ["src/cljx"]
-  :test-paths ["target/test-classes"
-               "test"]
+  :test-paths ["target/test-classes"]
   :profiles {:dev
              {:dependencies [[om "0.5.3"]
                              [ring/ring "1.2.1"]
@@ -18,6 +17,7 @@
                              [fogus/ring-edn "0.2.0"]
                              [http-kit "2.1.16"]
                              [com.stuartsierra/component "0.2.1"]
+                             [org.clojure/test.check "0.5.7"]
                              [com.cemerick/clojurescript.test "0.3.0"]
                              [com.cemerick/double-check "0.5.7-SNAPSHOT"]]
               :plugins [[lein-cljsbuild "1.0.3"]
@@ -43,8 +43,7 @@
               :cljsbuild
               {:builds [{:id "textarea"
                          :source-paths ["target/classes"
-                                        "examples/cljs"
-                                        "test"]
+                                        "examples/cljs"]
                          :compiler {:output-to "resources/main.js"
                                     :output-dir "resources/out"
                                     :source-map true

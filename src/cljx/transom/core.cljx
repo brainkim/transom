@@ -177,7 +177,7 @@
   ;; index is where we are in the document
   (assert (<= caret (count-before edit)))
   (loop [caret caret, index 0, edit edit]
-    (if (<= caret index) ;; <= vs < ?
+    (if (or (< caret index) (empty? edit))
       caret
       (let [op (first edit)
             caret (case (first op)
