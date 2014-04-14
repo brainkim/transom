@@ -30,7 +30,7 @@
 (defn diff
   [a b]
   (if (= a b)
-    [:= (count a)]
+    [[:= (count a)]] ;; don't forget to wrap it dummy
     (let [pre (common-prefix a b)
           suf (common-suffix a b)]
       (if (< pre suf)

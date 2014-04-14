@@ -7,7 +7,6 @@
                  [com.keminglabs/cljx "0.3.2"]
                  [org.clojure/core.match "0.2.1"]
                  [org.clojure/core.async "0.1.278.0-76b25b-alpha"]]
-  :hooks [cljx.hooks]
   :source-paths ["src/cljx"]
   :test-paths ["target/test-classes"]
   :profiles {:dev

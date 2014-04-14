@@ -117,7 +117,7 @@
          [[:= _ ] [:= _ ]] (conj out [op1 op2])
          [[:= p1] [:- p2]] (conj out [:nop op2])
          [[:- p1] [:= p2]] (conj out [op1 :nop])
-         :else out))]
+         :else (conj out [:nop :nop])))]
     (->> (align-transform edit1 edit2)
          (reduce compare-ops [])
          pack-pairs)))
@@ -164,7 +164,9 @@
           [[:+ _] [:= _]] (conj out op1)
           [[:+ _] [:- _]] out
           [[:= _] [:= _]] (conj out op1)
-          [[:= _] [:- _]] (conj out op2)))]
+          [[:= _] [:- _]] (conj out op2)
+          [:nop   _     ] out
+          [_      :nop  ] out))]
      (->> (align-compose edit1 edit2)
           (reduce compare-ops [])
           pack)))

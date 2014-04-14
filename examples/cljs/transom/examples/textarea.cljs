@@ -72,12 +72,6 @@
        [:+ (rand-char)]
        [:= (- doc-len entry)]])))
 
-(defn append-edit
-  [doc-string]
-  (transom/pack
-    [[:= (count doc-string)]
-     [:+ "f"]]))
-
 (defn fake-delete
   [doc-string]
   (let [doc-len (count doc-string)]
@@ -98,14 +92,13 @@
       (swap! state
              (fn [doc]
                (let [edit (fake-delete (document/value doc))
-                     _ (println edit)
                      doc (document/patch doc edit)
                      version (document/version doc)]
                  (put! in {:type :edit :id :FUCK_YOU :edit edit :version version})
                  doc)))))
     (go (while true
       (let [{:keys [edit version id]} (<! out)]
-        (<! (timeout 1000))
+        (<! (timeout 32)) ;; simulate lag
         (swap! state
                (fn [doc]
                  (let [edit (document/transform-edit doc edit version)
@@ -158,15 +151,12 @@
             (let [{:keys [pending buffer]} @!stage]
               (swap! !stage assoc :version version)
               (if (nil? pending)
-                (do
-                  (swap! !app-state
-                         #(merge % {:doc (transom/patch (:doc %) edit)
-                                    :theirs true
-                                    :selection
-                                    {:start (transom/transform-caret (get-in % [:selection :start])
-                                                                     edit)
-                                     :end (transom/transform-caret (get-in % [:selection :end]) edit)}
-                                    })))
+                (swap! !app-state
+                       #(merge % {:doc (transom/patch (:doc %) edit)
+                                  :theirs true
+                                  :selection
+                                  {:start (transom/transform-caret (get-in % [:selection :start]) edit)
+                                   :end (transom/transform-caret (get-in % [:selection :end]) edit)}}))
                 (let [[pending' edit'] (transom/transform pending edit)]
                   (if (nil? buffer)
                     (do
