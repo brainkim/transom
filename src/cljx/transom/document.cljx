@@ -7,7 +7,7 @@
   (transform-edit [this edit] [this edit last-seen])
   (patch [this edit]))
 
-(deftype Document [value history]
+(defrecord Document [value history]
   IDocument
   (value [this] value)
   (version [this] (count history))

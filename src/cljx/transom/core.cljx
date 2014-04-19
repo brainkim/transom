@@ -165,6 +165,8 @@
           [[:+ _] [:- _]] out
           [[:= _] [:= _]] (conj out op1)
           [[:= _] [:- _]] (conj out op2)
+          ;; We need these cases for weird edge cases
+          ;; e.g. (compose [[:- 0]] [[:= 0]])
           [:nop   _     ] out
           [_      :nop  ] out))]
      (->> (align-compose edit1 edit2)

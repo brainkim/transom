@@ -9,9 +9,7 @@
             [transom.document :as document]
             [goog.dom :as gdom]
             [goog.dom.selection :as selection]
-            [goog.events :refer [listen]]
-            [goog.net.WebSocket.EventType :refer [OPENED CLOSED ERROR MESSAGE]])
-  (:import (goog.net WebSocket)))
+            [transom.examples.websocket :refer [socket]]))
 (enable-console-print!)
 
 (defn host
@@ -58,176 +56,89 @@
                              :onChange change
                              :onSelect select}))))))
 
-(defn rand-char
-  []
-  (let [chars (map char (concat (range 48 58) (range 66 92) (range 97 123)))]
-    (rand-nth chars)))
+(defn send-edit!
+  [sock edit version id]
+  (put! sock (pr-str {:type :edit :edit edit :version version :id id})))
 
-(defn rand-edit
-  [doc-string]
-  (transom/pack
-    (let [doc-len (count doc-string)
-          entry (rand-int doc-len)]
-      [[:= entry]
-       [:+ (rand-char)]
-       [:= (- doc-len entry)]])))
+(defn stage
+  [sock edit !app-state !stage]
+  (let [id (get @!app-state :id)]
+    (swap! !stage
+      (fn [{:keys [pending buffer version]}]
+        (if (nil? pending)
+          (do
+            (send-edit! sock edit version id)
+            {:version version
+             :pending edit
+             :buffer nil})
+          (if (nil? buffer)
+            {:version version
+             :pending pending
+             :buffer edit}
+            {:version version
+             :pending pending
+             :buffer (transom/compose buffer edit)}))))))
 
-(defn fake-delete
-  [doc-string]
-  (let [doc-len (count doc-string)]
-    (if (= 0 doc-len)
-      [[:= doc-len]]
-      (let [entry (rand-int (inc doc-len))
-            delete-len (rand-int (inc (- doc-len entry)))]
-        (transom/pack
-          [[:= entry]
-           [:- delete-len]
-           [:= (- doc-len entry delete-len)]])))))
+(defn acknowledge
+  [sock version id !stage]
+  (swap! !stage
+    (fn [{past-version :version :keys [pending buffer]}]
+      (assert (not (nil? pending))
+              "Received ack without anything pending")
+      (if (nil? buffer)
+        {:pending nil :buffer nil :version version}
+        (do
+          (send-edit! sock buffer past-version id)
+          {:pending buffer :buffer nil :version version})))))
 
-(defn mocksocket
-  [in out _]
-  (let [state (atom (document/document))]
-    (go (while true
-      (<! (timeout 1000))
-      (swap! state
-             (fn [doc]
-               (let [edit (fake-delete (document/value doc))
-                     doc (document/patch doc edit)
-                     version (document/version doc)]
-                 (put! in {:type :edit :id :FUCK_YOU :edit edit :version version})
-                 doc)))))
-    (go (while true
-      (let [{:keys [edit version id]} (<! out)]
-        (<! (timeout 32)) ;; simulate lag
-        (swap! state
-               (fn [doc]
-                 (let [edit (document/transform-edit doc edit version)
-                       doc  (document/patch doc edit)
-                       version (document/version doc)]
-                   (put! in {:type :edit :id id :edit edit :version version})
-                   doc))))))))
+(defn patch
+  [edit !app-state]
+  (swap! !app-state
+    (fn [{:keys [doc selection]}]
+      {:doc (transom/patch doc edit)
+       :theirs true
+       :selection
+       {:start (transom/transform-caret (:start selection) edit)
+        :end   (transom/transform-caret (:end selection) edit)}})))
 
-(defn websocket
-  [in out ws]
-  (listen ws OPENED 
-          (fn [_]
-            (.send ws (pr-str {:type :init}))))
-  (listen ws CLOSED
-          (fn [_]
-            (async/close! in)))
-  (listen ws ERROR
-          (fn [ev]
-            (println "ERROR" ev)
-            (async/close! in)))
-  (listen ws MESSAGE
-          (fn [ev]
-            (let [message (.-message ev)
-                  message (read-string message)]
-              (put! in message))))
-  (.open ws (str "ws://" (host) "/textarea"))
-  (go-loop []
-    (when-let [m (<! out)]
-      (.send ws (pr-str m))
-      (recur))
-    (.close ws)))
+(defn transform
+  [edit version !app-state !stage]
+  (swap! !stage
+    (fn [{:keys [pending buffer]}]
+      (if (nil? pending)
+        (do
+          (patch edit !app-state)
+          {:version version :pending nil :buffer nil})
+        (let [[pending' edit'] (transom/transform pending edit)]
+          (if (nil? buffer)
+            (do
+              (patch edit' !app-state)
+              {:version version :pending 'pending :buffer nil})
+            (let [[buffer' edit''] (transom/transform buffer edit')]
+              (patch edit'' !app-state)
+              {:version version :pending pending' :buffer 'buffer})))))))
 
-(defn controller
-  [in out conn !app-state !stage]
+(defn receive
+  [sock !app-state !stage]
   (go (while true
-    (alt!
-      in
-      ([message]
-        (let [{:keys [edit version id]} message]
-          (if (= id (:id @!app-state))
-            ;; ack
-            (swap! !stage
-              (fn [{:keys [pending buffer] :as stage}]
-                (if (nil? buffer)
-                  {:pending nil :buffer nil :version version}
-                  (do
-                    (put! conn {:edit buffer :version version :id (:id @!app-state)})
-                    {:pending buffer :buffer nil :version version}))))
-            ;; external edit
-            (let [{:keys [pending buffer]} @!stage]
-              (swap! !stage assoc :version version)
-              (if (nil? pending)
-                (swap! !app-state
-                       #(merge % {:doc (transom/patch (:doc %) edit)
-                                  :theirs true
-                                  :selection
-                                  {:start (transom/transform-caret (get-in % [:selection :start]) edit)
-                                   :end (transom/transform-caret (get-in % [:selection :end]) edit)}}))
-                (let [[pending' edit'] (transom/transform pending edit)]
-                  (if (nil? buffer)
-                    (do
-                      (swap! !stage assoc :pending pending')
-                      (swap! !app-state
-                             #(merge % {:doc (transom/patch (:doc %) edit')
-                                        :theirs true
-                                        :selection
-                                        {:start (transom/transform-caret (get-in % [:selection :start])
-                                                                         edit')
-                                         :end (transom/transform-caret (get-in % [:selection :end])
-                                                                       edit')}})))
-                    (let [[buffer' edit''] (transom/transform buffer edit')]
-                      (do
-                        (swap! !stage merge {:pending pending' :buffer buffer'})
-                        (swap! !app-state
-                               #(merge % {:doc (transom/patch (:doc %) edit'')
-                                          :theirs true
-                                          :selection
-                                          {:start (transom/transform-caret (get-in % [:selection :start])
-                                                                           edit'')
-                                           :end (transom/transform-caret (get-in % [:selection :end])
-                                                                         edit'')}})))))))))))
-      out
-      ([edit]
-        (swap! !stage
-               (fn [{:keys [pending buffer version]}]
-                 (if (nil? pending)
-                   ;; immediately send edit
-                   (do
-                     (put! conn {:edit edit :version version :id (:id @!app-state)})
-                     {:pending edit :buffer nil :version version})
-                   ;; add edit to buffer
-                   (if (nil? buffer)
-                     {:pending pending :buffer edit :version version}
-                     ;; buffer is full
-                     {:pending pending
-                      :buffer (transom/compose buffer edit)
-                      :version version})))))))))
-
-#_(defn stage
-  [in out !stage]
-  (go (while true
-    (let [edit (<! in)]
-      (swap! !stage
-             (fn [{:keys [pending buffer version]}]
-               (if (nil? pending)
-                 ;; immediately send edit
-                 (do
-                   (put! out {:edit edit :version version :id (:id @!app-state)})
-                   {:pending edit :buffer nil :version version})
-                 ;; add edit to buffer
-                 (if (nil? buffer)
-                   {:pending pending :buffer edit :version version}
-                   ;; buffer is full
-                   {:pending pending
-                    :buffer (transom/compose buffer edit)
-                    :version version}))))))))
+    (when-let [message (<! sock)]
+      (let [{:keys [edit version id]} (read-string message)]
+        (if (= id (:id @!app-state))
+          (acknowledge sock version id !stage)
+          (transform edit version !app-state !stage)))))))
 
 (defn ^:export main
   []
   (let [!app-state (atom {:doc "" :id 0 :selection {:start 0 :end 0}})
-        !stage (atom {:pending nil :buffer nil :version nil})
-        in (chan) out (chan) conn (chan)]
-    (mocksocket in conn (WebSocket. false))
-    (controller in out conn !app-state !stage)
+        !stage (atom {:pending nil :buffer nil :version 0})
+        sock (socket (str "ws://" (host) "/textarea"))]
+    (receive sock !app-state !stage)
     (om/root app !app-state
              {:target (gdom/getElement "app")
               :tx-listen
               (fn [{:keys [old-value new-value path]} cursor]
                 (when (= path [:doc])
-                  (put! out (diff old-value new-value))))})
-    (om/root x-ray !stage {:target (gdom/getElement "xray")})))
+                  (stage sock (diff old-value new-value) !app-state !stage)))})
+    (om/root x-ray !stage
+             {:target (gdom/getElement "xray")})))
 (main)
