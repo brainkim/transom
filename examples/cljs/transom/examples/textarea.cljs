@@ -12,6 +12,9 @@
             [transom.examples.websocket :refer [socket]]))
 (enable-console-print!)
 
+(def ^:dynamic *sock* nil)
+(def ^:dynamic *id* nil)
+
 (defn host
   []
   (.. js/window -location -host))
@@ -24,12 +27,12 @@
 
 (defn app
   [data owner]
-  (letfn [(change [e]
-            (let [doc (.. e -target -value)]
+  (letfn [(change [ev]
+            (let [doc (.. ev -target -value)]
               (om/update! data [:doc] doc)
               (om/update! data [:theirs] false)))
-          (select [e]
-            (let [node (.-target e)
+          (select [ev]
+            (let [node (.-target ev)
                   start (selection/getStart node)
                   end (selection/getEnd node)]
               (om/update! data [:selection] {:start start :end end})))]
@@ -47,8 +50,8 @@
       (render [_]
         (dom/div nil
           (om/build x-ray data)
-          (dom/textarea #js {:disabled (nil? (:id data))
-                             :value (:doc data)
+          (dom/textarea #js {:disabled (nil? (:doc data))
+                             :value (or (:doc data) "")
                              :ref "textarea"
                              :autoFocus true
                              :rows 50
@@ -56,39 +59,46 @@
                              :onChange change
                              :onSelect select}))))))
 
+(defn initialize
+  [inits !app-state !stage]
+  (go
+    (let [{:keys [id doc version]} (<! inits)]
+      (set! *id* id)
+      (swap! !app-state assoc :doc doc)
+      (swap! !stage assoc :version version))))
+
 (defn send-edit!
-  [sock edit version id]
-  (put! sock (pr-str {:type :edit :edit edit :version version :id id})))
+  [edit version]
+  (put! *sock* (pr-str {:type :edit :edit edit :version version :id *id*})))
 
 (defn stage
-  [sock edit !app-state !stage]
-  (let [id (get @!app-state :id)]
-    (swap! !stage
-      (fn [{:keys [pending buffer version]}]
-        (if (nil? pending)
-          (do
-            (send-edit! sock edit version id)
-            {:version version
-             :pending edit
-             :buffer nil})
-          (if (nil? buffer)
-            {:version version
-             :pending pending
-             :buffer edit}
-            {:version version
-             :pending pending
-             :buffer (transom/compose buffer edit)}))))))
+  [edit !stage]
+  (swap! !stage
+    (fn [{:keys [pending buffer version]}]
+      (if (nil? pending)
+        (do
+          (send-edit! edit version)
+          {:version version
+           :pending edit
+           :buffer nil})
+        (if (nil? buffer)
+          {:version version
+           :pending pending
+           :buffer edit}
+          {:version version
+           :pending pending
+           :buffer (transom/compose buffer edit)})))))
 
 (defn acknowledge
-  [sock version id !stage]
+  [edit version !stage]
   (swap! !stage
-    (fn [{past-version :version :keys [pending buffer]}]
-      (assert (not (nil? pending))
-              "Received ack without anything pending")
+    (fn [{:keys [pending buffer]}]
+      (assert (not (nil? pending)) "Received ack without anything pending")
       (if (nil? buffer)
         {:pending nil :buffer nil :version version}
         (do
-          (send-edit! sock buffer past-version id)
+          ;; we can send the new version because we don't have to transform against our own edits
+          (send-edit! buffer version)
           {:pending buffer :buffer nil :version version})))))
 
 (defn patch
@@ -99,7 +109,7 @@
        :theirs true
        :selection
        {:start (transom/transform-caret (:start selection) edit)
-        :end   (transom/transform-caret (:end selection) edit)}})))
+        :end (transom/transform-caret (:end selection) edit)}})))
 
 (defn transform
   [edit version !app-state !stage]
@@ -113,32 +123,35 @@
           (if (nil? buffer)
             (do
               (patch edit' !app-state)
-              {:version version :pending 'pending :buffer nil})
+              {:version version :pending pending' :buffer nil})
             (let [[buffer' edit''] (transom/transform buffer edit')]
               (patch edit'' !app-state)
-              {:version version :pending pending' :buffer 'buffer})))))))
+              {:version version :pending pending' :buffer buffer'})))))))
 
 (defn receive
-  [sock !app-state !stage]
-  (go (while true
-    (when-let [message (<! sock)]
-      (let [{:keys [edit version id]} (read-string message)]
-        (if (= id (:id @!app-state))
-          (acknowledge sock version id !stage)
-          (transform edit version !app-state !stage)))))))
+  [edits !app-state !stage]
+  (go-loop []
+    (when-let [message (<! edits)]
+      (let [{:keys [edit version id]} message]
+        (if (= id *id*)
+          (acknowledge edit version !stage)
+          (transform edit version !app-state !stage)))
+      (recur))))
 
-(defn ^:export main
+(defn main
   []
-  (let [!app-state (atom {:doc "" :id 0 :selection {:start 0 :end 0}})
-        !stage (atom {:pending nil :buffer nil :version 0})
-        sock (socket (str "ws://" (host) "/textarea"))]
-    (receive sock !app-state !stage)
+  (set! *sock* (socket (str "ws://" (host) "/textarea")))
+  (let [!app-state (atom {:doc nil :selection {:start 0 :end 0}})
+        !stage (atom {:pending nil :buffer nil :version nil})
+        sock-pub (async/pub (async/map read-string [*sock*]) :type)
+        inits (async/sub sock-pub :init (chan))
+        edits (async/sub sock-pub :edit (chan))]
+    (initialize inits !app-state !stage)
+    (receive edits !app-state !stage)
     (om/root app !app-state
              {:target (gdom/getElement "app")
               :tx-listen
               (fn [{:keys [old-value new-value path]} cursor]
                 (when (= path [:doc])
-                  (stage sock (diff old-value new-value) !app-state !stage)))})
-    (om/root x-ray !stage
-             {:target (gdom/getElement "xray")})))
+                  (stage (diff old-value new-value) !stage)))})))
 (main)

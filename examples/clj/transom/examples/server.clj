@@ -14,13 +14,19 @@
 (defonce !channels (atom #{}))
 (def killer (chan))
 (def inbox (chan))
+(def inbox* (async/mult inbox))
+(let [debug (async/tap inbox* (chan))]
+  (go-loop []
+    (when-let [d (<! debug)]
+      (println "inbox" d)
+      (recur))))
 
 (defn websocket [request]
   (with-channel request c
     (on-close c (fn [_] (swap! !channels disj c)))
     (on-receive c (fn [data]
                     (swap! !channels conj c)
-                    (put! inbox (edn/read-string data))))))
+                    (put! inbox [(edn/read-string data) c])))))
 
 (defn app
   []
@@ -47,29 +53,26 @@
   []
   (let [!ids (async/to-chan (range))
         !doc (atom (document/document))
-        inbox-type (async/pub inbox :type)
-        inits (async/sub inbox-type :init (chan))
-        edits (async/sub inbox-type :edit (chan))]
-    (go-loop []
+        inbox-pub (async/pub (async/tap inbox* (chan)) #(get-in % [0 :type]))
+        inits (async/sub inbox-pub :init (chan))
+        edits (async/sub inbox-pub :edit (chan))]
+    (go-loop [doc (document/document)]
       (alt!
-        (timeout 500)
-        ([_]
-          (???)
-          (recur))
-        killer
-        ([_]
-          (println "you killed me too!"))))
-    (go-loop []
-      (alt!
+        inits
+        ([[_ sender]]
+          (let [message (pr-str {:type :init
+                                 :id (<! !ids)
+                                 :doc (document/value doc)
+                                 :version (document/version doc)})]
+            (send! sender message))
+          (recur doc))
         edits
-        ([{:keys [edit version id] :as message}]
-          (println edit version id)
-          (swap! !doc
-            (fn [doc]
-              (let [edit (document/transform-edit doc edit version)
-                    doc (document/patch doc edit)
-                    version (document/version doc)])))
-          (recur))
+        ([[{:keys [edit version id]} _]]
+          (let [edit' (document/transform-edit doc edit version)
+                doc' (document/patch doc edit')
+                version' (document/version doc')]
+            (send-all! (pr-str {:type :edit :edit edit' :version version' :id id}))
+            (recur doc')))
         killer
         ([_]
           (println "you killed me."))))
