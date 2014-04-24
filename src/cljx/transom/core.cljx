@@ -8,9 +8,9 @@
 (defn count-op
   [[o p]]
   (case o
-    := p
-    :- p
-    :+ (count p)))
+    :retain p
+    :delete p
+    :insert (count p)))
 
 (defn count-before
   [edit]
@@ -18,9 +18,9 @@
     [(inc-count
       [c [o p]]
       (case o
-        := (+ c p)
-        :- (+ c p)
-        :+ c))]
+        :retain (+ c p)
+        :delete (+ c p)
+        :insert c))]
     (reduce inc-count 0 edit)))
 
 (defn count-after
@@ -29,9 +29,9 @@
     [(inc-count
       [c [o p]]
       (case o
-        := (+ c p)
-        :- c
-        :+ (+ c (count p))))]
+        :retain (+ c p)
+        :delete c
+        :insert (+ c (count p))))]
     (reduce inc-count 0 edit)))
 
 (defn patch
@@ -46,9 +46,9 @@
        (let [[o p] (first edit)
              r (rest edit)]
          (case o
-           := (recur (drop p doc) r (concat out (take p doc)))
-           :- (recur (drop p doc) r out)
-           :+ (recur doc r (concat out p)))))))
+           :retain (recur (drop p doc) r (concat out (take p doc)))
+           :delete (recur (drop p doc) r out)
+           :insert (recur doc r (concat out p)))))))
   ([doc edit & edits]
    (reduce patch (patch doc edit) edits)))
 
@@ -63,9 +63,9 @@
           (combine
             [op1 op2]
             (match [op1 op2]
-              [[:= p1] [:= p2]] [:= (+ p1 p2)]
-              [[:- p1] [:- p2]] [:- (+ p1 p2)]
-              [[:+ p1] [:+ p2]] [:+ (str p1 p2)]))
+              [[:retain p1] [:retain p2]] [:retain (+ p1 p2)]
+              [[:delete p1] [:delete p2]] [:delete (+ p1 p2)]
+              [[:insert p1] [:insert p2]] [:insert (str p1 p2)]))
           (reducer
            [[pop edit' :as prev] cop]
            (cond
@@ -87,8 +87,8 @@
       (cond
         (nil? op1) (concat out (map #(vector :nop %) edit2))
         (nil? op2) (concat out (map #(vector % :nop) edit1))
-        (= :+ (first op1)) (recur (rest edit1) edit2 (conj out [op1 :nop]))
-        (= :+ (first op2)) (recur edit1 (rest edit2) (conj out [:nop op2]))
+        (= :insert (first op1)) (recur (rest edit1) edit2 (conj out [op1 :nop]))
+        (= :insert (first op2)) (recur edit1 (rest edit2) (conj out [:nop op2]))
         :else
         (let [[o1 p1] op1
               [o2 p2] op2]
@@ -112,11 +112,11 @@
     [(compare-ops
        [out [op1 op2]]
        (match [op1 op2]
-         [[:+ p1] _      ] (conj out [op1 [:= (count p1)]])
-         [_       [:+ p2]] (conj out [[:= (count p2)] op2])
-         [[:= _ ] [:= _ ]] (conj out [op1 op2])
-         [[:= p1] [:- p2]] (conj out [:nop op2])
-         [[:- p1] [:= p2]] (conj out [op1 :nop])
+         [[:insert p1] _           ] (conj out [op1 [:retain (count p1)]])
+         [_            [:insert p2]] (conj out [[:retain (count p2)] op2])
+         [[:retain _ ] [:retain _ ]] (conj out [op1 op2])
+         [[:retain p1] [:delete p2]] (conj out [:nop op2])
+         [[:delete p1] [:retain p2]] (conj out [op1 :nop])
          :else (conj out [:nop :nop])))]
     (->> (align-transform edit1 edit2)
          (reduce compare-ops [])
@@ -129,8 +129,8 @@
       (cond
         (nil? op1) (concat out (map #(vector :nop %) edit2))
         (nil? op2) (concat out (map #(vector % :nop) edit1))
-        (= :- (first op1)) (recur (rest edit1) edit2 (conj out [op1 :nop]))
-        (= :+ (first op2)) (recur edit1 (rest edit2) (conj out [:nop op2]))
+        (= :delete (first op1)) (recur (rest edit1) edit2 (conj out [op1 :nop]))
+        (= :insert (first op2)) (recur edit1 (rest edit2) (conj out [:nop op2]))
 
         :else
         (let [[o1 p1] op1
@@ -159,14 +159,14 @@
      [(compare-ops
         [out [op1 op2]]
         (match [op1 op2]
-          [[:- _] _     ] (conj out op1)
-          [_      [:+ _]] (conj out op2)
-          [[:+ _] [:= _]] (conj out op1)
-          [[:+ _] [:- _]] out
-          [[:= _] [:= _]] (conj out op1)
-          [[:= _] [:- _]] (conj out op2)
+          [[:delete _] _          ] (conj out op1)
+          [_           [:insert _]] (conj out op2)
+          [[:insert _] [:retain _]] (conj out op1)
+          [[:insert _] [:delete _]] out
+          [[:retain _] [:retain _]] (conj out op1)
+          [[:retain _] [:delete _]] (conj out op2)
           ;; We need these cases for weird edge cases
-          ;; e.g. (compose [[:- 0]] [[:= 0]])
+          ;; e.g. (compose [[:delete 0]] [[:retain 0]])
           [:nop   _     ] out
           [_      :nop  ] out))]
      (->> (align-compose edit1 edit2)
@@ -181,12 +181,13 @@
   ;; index is where we are in the document
   (assert (<= caret (count-before edit)))
   (loop [caret caret, index 0, edit edit]
-    (if (or (< caret index) (empty? edit))
+    ;; (= caret index) means we stop as well
+    (if (or (<= caret index) (empty? edit))
       caret
       (let [op (first edit)
             caret (case (first op)
-                    := caret
-                    :- (- caret (second op))
-                    :+ (+ caret (count (second op))))
+                    :retain caret
+                    :delete (- caret (second op))
+                    :insert (+ caret (count (second op))))
             index (+ index (count-op op))]
         (recur caret index (rest edit))))))

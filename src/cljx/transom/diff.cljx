@@ -22,15 +22,15 @@
 
 (defn ^:private create-edit
   [a b pre suf]
-  (transom/pack [[:= pre]
-                 [:- (- (count a) pre suf)]
-                 [:+ (subs b pre (- (count b) suf))]
-                 [:= suf]]))
+  (transom/pack [[:retain pre]
+                 [:delete (- (count a) pre suf)]
+                 [:insert (subs b pre (- (count b) suf))]
+                 [:retain suf]]))
 
 (defn diff
   [a b]
   (if (= a b)
-    [[:= (count a)]] ;; don't forget to wrap it dummy
+    [[:retain (count a)]] ;; don't forget to wrap it dummy
     (let [pre (common-prefix a b)
           suf (common-suffix a b)]
       (if (< pre suf)

@@ -4,7 +4,7 @@
             [transom.core :refer :all]))
 
 (deftest count-test
-  (let [edit [[:= 2] [:- 1] [:+ "foo"]]]
+  (let [edit [[:retain 2] [:delete 1] [:insert "foo"]]]
     (are [x y] (= x y)
       3 (count-before edit)
       5 (count-after  edit))))
@@ -12,21 +12,21 @@
 (deftest patch-test
   (are [x y] (= x y)
     "abxcd"
-    (patch "abcd" [[:= 2] [:+ "x"] [:= 2]])
+    (patch "abcd" [[:retain 2] [:insert "x"] [:retain 2]])
     ""
-    (patch "abcd" [[:- 4]])
+    (patch "abcd" [[:delete 4]])
     "axd"
-    (patch "abxcd" [[:= 1] [:- 1] [:= 1] [:- 1] [:= 1]])
+    (patch "abxcd" [[:retain 1] [:delete 1] [:retain 1] [:delete 1] [:retain 1]])
     "foobar"
-    (patch "foobar" [[:= 3] [:+ "xs"] [:= 3]] [[:= 3] [:- 2] [:= 3]]))
-  (is (thrown? AssertionError (patch "abcd" [[:= 2] [:+ "f"] [:- 1]]))))
+    (patch "foobar" [[:retain 3] [:insert "xs"] [:retain 3]] [[:retain 3] [:delete 2] [:retain 3]]))
+  (is (thrown? AssertionError (patch "abcd" [[:retain 2] [:insert "f"] [:delete 1]]))))
 
 (deftest pack-test
   (are [x y] (= x y)
-    [[:= 5] [:+ "xsy"] [:= 3]]
-    (pack [[:= 2] :nop [:= 3] [:+ "xs"] [:+ "y"] [:= 1] [:= 2]])
-    [[:= 3] [:+ "xsy"] [:= 2]]
-    (pack [[:= 2] [:= 1] [:= 0] :nop [:+ "xs"] :nop [:+ "y"] [:= 0] [:= 2]])))
+    [[:retain 5] [:insert "xsy"] [:retain 3]]
+    (pack [[:retain 2] :nop [:retain 3] [:insert "xs"] [:insert "y"] [:retain 1] [:retain 2]])
+    [[:retain 3] [:insert "xsy"] [:retain 2]]
+    (pack [[:retain 2] [:retain 1] [:retain 0] :nop [:insert "xs"] :nop [:insert "y"] [:retain 0] [:retain 2]])))
 
 (defn transform-helper
   [in op1 op2]
@@ -35,31 +35,32 @@
 
 (deftest transform-test
   (transform-helper "food"
-                    [[:= 3] [:= 1]]
-                    [[:= 1] [:= 3]])
+                    [[:retain 3] [:retain 1]]
+                    [[:retain 1] [:retain 3]])
   (transform-helper "foo"
-                    [[:= 2] [:- 1]]
-                    [[:- 1] [:= 2]])
+                    [[:retain 2] [:delete 1]]
+                    [[:delete 1] [:retain 2]])
   (transform-helper "grandpa"
-                    [[:- 2] [:= 5]]
-                    [[:= 5] [:- 2]])
+                    [[:delete 2] [:retain 5]]
+                    [[:retain 5] [:delete 2]])
   (transform-helper "brian"
-                    [[:= 2] [:- 2] [:= 1]]
-                    [[:= 2] [:- 3]])
+                    [[:retain 2] [:delete 2] [:retain 1]]
+                    [[:retain 2] [:delete 3]])
   (transform-helper "fuck"
-                    [[:= 2] [:+ "foo"][:= 2]]
-                    [[:+ "bar"] [:= 4]])
+                    [[:retain 2] [:insert "foo"][:retain 2]]
+                    [[:insert "bar"] [:retain 4]])
   (transform-helper "pasta"
-                    [[:= 1] [:+ "izz"] [:- 3] [:= 1]]
-                    [[:- 1] [:= 4]]))
+                    [[:retain 1] [:insert "izz"] [:delete 3] [:retain 1]]
+                    [[:delete 1] [:retain 4]]))
 
 (deftest compose-test
-  (is (= (compose [[:+ "foo"] [:= 3] [:- 2]]
-                  [[:= 3] [:+ "bar"] [:- 2] [:= 1]]))
-      [[:+ "foo"] [:+ "bar"] [:- 2] [:- 2] [:= 1]]))
+  (is (= (compose [[:insert "foo"] [:retain 3] [:delete 2]]
+                  [[:retain 3] [:insert "bar"] [:delete 2] [:retain 1]]))
+      [[:insert "foo"] [:insert "bar"] [:delete 2] [:delete 2] [:retain 1]]))
 
 (deftest transform-caret-test
   (are [x y] (= x y)
-    8 (transform-caret 5 [[:+ "foo"] [:= 6]])
-    2 (transform-caret 5 [[:- 3] [:= 10]])
-    8 (transform-caret 5 [[:= 5] [:+ "foo"]])))
+    8 (transform-caret 5 [[:insert "foo"] [:retain 6]])
+    2 (transform-caret 5 [[:delete 3] [:retain 10]])
+    5 (transform-caret 5 [[:retain 5] [:insert "foo"]])
+    4 (transform-caret 5 [[:retain 4] [:delete 1]])))
