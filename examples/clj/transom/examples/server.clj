@@ -1,84 +1,50 @@
 (ns transom.examples.server
-  (:require [clojure.core.async :as async :refer [go go-loop <! >! chan put! alt! close!]]
+  (:require [clojure.core.async :as async]
             [clojure.tools.reader.edn :as edn]
-            [ring.util.response :refer [file-response]]
-            [ring.middleware.resource :refer [wrap-resource]]
             [ring.middleware.edn :refer [wrap-edn-params]]
-            [org.httpkit.server :as httpkit :refer [with-channel on-close on-receive send! run-server]]
-            [compojure.core :refer [routes GET]]
+            [ring.middleware.session :refer [wrap-session]]
+            [org.httpkit.server :as server]
+            [compojure.core :as compojure :refer [defroutes GET]]
             [compojure.route :as route]
-            [transom.core :as transom]
-            [transom.document :as document]))
+            [com.stuartsierra.component :as component]))
 
-(defonce !server (atom nil))
-(defonce !channels (atom #{}))
-(def killer (chan))
-(def inbox (chan))
-(def inbox* (async/mult inbox))
-(let [debug (async/tap inbox* (chan))]
-  (go-loop []
-    (when-let [d (<! debug)]
-      (println "inbox" d)
-      (recur))))
+(defn websocket [req]
+  (let [example (get-in req [:route-params :example])
+        room (get-in req [:rooms (keyword example)])]
+    (server/with-channel req chan
+      (server/on-close chan
+        (fn [_]
+          (async/put! room [{:type :close} chan])))
+      (server/on-receive chan
+        (fn [data]
+          (async/put! room [(edn/read-string data) chan]))))))
 
-(defn websocket [request]
-  (with-channel request c
-    (on-close c (fn [_] (swap! !channels disj c)))
-    (on-receive c (fn [data]
-                    (swap! !channels conj c)
-                    (put! inbox [(edn/read-string data) c])))))
+(defn wrap-rooms
+  [app rooms]
+  (fn [req]
+    (let [req (assoc req :rooms rooms)]
+      (app req))))
 
-(defn app
-  []
-  (-> (routes (GET "/textarea" [] websocket)
-              (route/files "/" {:root "resources"})
-              (route/not-found "¯\\_(ツ)_/¯"))
-      wrap-edn-params))
+(defroutes routes
+  (GET "/ws/:example" [example] websocket)
+  (route/files "/" {:root "resources"})
+  (route/not-found "404 ¯\\_(ツ)_/¯"))
 
-(defn send-all!
-  [message]
-  (doseq [c @!channels]
-    (send! c message)))
+(defrecord Server
+  [port rooms container]
+  component/Lifecycle
+  (start [this]
+    (let [app (-> routes
+                  wrap-edn-params
+                  (wrap-rooms rooms))]
+      (println "Server started!")
+      (assoc this :container (server/run-server app {:port port}))))
+  (stop [this]
+    (println "Server stopped!")  
+    (container :timeout 100)
+    this))
 
-(defn stop-server
-  []
-  (when-not (nil? @!server)
-    (@!server :timeout 100)
-    (put! killer :kill)
-    (reset! !server nil)
-    (reset! !channels #{})
-    (println "Server stoppped!")))
-
-(defn start-server
-  []
-  (let [!ids (async/to-chan (range))
-        !doc (atom (document/document))
-        inbox-pub (async/pub (async/tap inbox* (chan)) #(get-in % [0 :type]))
-        inits (async/sub inbox-pub :init (chan))
-        edits (async/sub inbox-pub :edit (chan))]
-    (go-loop [doc (document/document)]
-      (alt!
-        inits
-        ([[_ sender]]
-          (let [message (pr-str {:type :init
-                                 :id (<! !ids)
-                                 :doc (document/value doc)
-                                 :version (document/version doc)})]
-            (send! sender message))
-          (recur doc))
-        edits
-        ([[{:keys [edit version id]} _]]
-          (let [edit' (document/transform-edit doc edit version)
-                doc' (document/patch doc edit')
-                version' (document/version doc')]
-            (send-all! (pr-str {:type :edit :edit edit' :version version' :id id}))
-            (recur doc')))
-        killer
-        ([_]
-          (println "you killed me."))))
-    (reset! !server (run-server (app) {:port 8000}))
-    (println "Server started!")))
-
-(defn -main
-  []
-  (start-server))
+(defn server
+  [port]
+  (map->Server
+    {:port port}))

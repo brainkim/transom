@@ -25,17 +25,18 @@
     (dom/pre nil
       (pr-str data))))
 
-(defn app
+(defn collab-textarea
   [data owner]
-  (letfn [(change [ev]
-            (let [doc (.. ev -target -value)]
-              (om/update! data [:doc] doc)
-              (om/update! data [:theirs] false)))
-          (select [ev]
-            (let [node (.-target ev)
-                  start (selection/getStart node)
-                  end (selection/getEnd node)]
-              (om/update! data [:selection] {:start start :end end})))]
+  (letfn
+    [(change [ev]
+       (let [doc (.. ev -target -value)]
+         (om/update! data [:doc] doc)
+         (om/update! data [:theirs] false)))
+     (select [ev]
+       (let [node (.-target ev)
+             start (selection/getStart node)
+             end (selection/getEnd node)]
+         (om/update! data [:selection] {:start start :end end})))]
     (reify
       om/IShouldUpdate
       (should-update [_ props _]
@@ -49,7 +50,6 @@
       om/IRender
       (render [_]
         (dom/div nil
-          (om/build x-ray data)
           (dom/textarea #js {:disabled (nil? (:doc data))
                              :value (or (:doc data) "")
                              :ref "textarea"
@@ -58,6 +58,13 @@
                              :cols 80
                              :onChange change
                              :onSelect select}))))))
+
+(defn app
+  [data owner]
+  (om/component
+    (dom/div nil
+      (om/build x-ray data)
+      (om/build collab-textarea data))))
 
 (defn initialize
   [inits !app-state !stage]
@@ -140,10 +147,10 @@
 
 (defn main
   []
-  (set! *sock* (socket (str "ws://" (host) "/textarea")))
+  (set! *sock* (socket (str "ws://" (host) "/ws/textarea")))
   (let [!app-state (atom {:doc nil :selection {:start 0 :end 0}})
         !stage (atom {:pending nil :buffer nil :version nil})
-        sock-pub (async/pub (async/map read-string [*sock*]) :type)
+        sock-pub (async/pub (async/map< read-string *sock*) :type)
         inits (async/sub sock-pub :init (chan))
         edits (async/sub sock-pub :edit (chan))]
     (initialize inits !app-state !stage)
@@ -153,5 +160,6 @@
               :tx-listen
               (fn [{:keys [old-value new-value path]} cursor]
                 (when (= path [:doc])
-                  (stage (diff old-value new-value) !stage)))})))
+                  (stage (diff old-value new-value) !stage)))})
+    (om/root x-ray !stage {:target (gdom/getElement "xray")})))
 (main)
