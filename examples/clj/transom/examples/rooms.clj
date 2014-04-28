@@ -13,49 +13,40 @@
     (server/send! chan message)))
 
 (defn room
-  [input killer]
-  (let [pub (async/pub input #(get-in % [0 :type]))
-        inits (async/sub pub :init (async/chan))
-        edits (async/sub pub :edit (async/chan))
-        closes (async/sub pub :close (async/chan))]
-    (async/go-loop [doc (document/document) chans #{}]
-      (async/alt!
-        inits
-        ([[_ sender]]
-          (let [message (pr-str {:type :init
-                                 :id (<! !ids)
-                                 :doc (document/value doc)
-                                 :version (document/version doc)})]
-            (server/send! sender message)
-            (recur doc (conj chans sender))))
-        edits
-        ([[message sender]]
+  ([input]
+    (room input (document/document)))
+  ([input doc]
+    (room input doc #{}))
+  ([input doc chans]
+    (async/go
+      (when-let [[message sender] (<! input)]
+        (case (message :type)
+          :init
+          (do
+            (server/send! sender (pr-str {:type :init
+                                          :id (<! !ids)
+                                          :doc (document/value doc)
+                                          :version (document/version doc)}))
+            (room input doc (conj chans sender)))
+          :edit
           (let [{:keys [edit version id]} message
                 edit' (document/transform-edit doc edit version)
                 doc' (document/patch doc edit')
                 version' (document/version doc')]
             (send-all! chans (pr-str {:type :edit
+                                      :id id
                                       :edit edit'
-                                      :version version'
-                                      :id id}))
-            (recur doc' chans)))
-        closes
-        ([[_ sender]]
-          (recur doc (disj chans sender)))
-        killer
-        ([_]
-          (println "killing room"))))
+                                      :version version'}))
+            (room input doc' chans))
+          :close
+          (room input doc (disj chans sender)))))
     input))
 
-(defrecord Rooms [killer]
+(defrecord Rooms []
   component/Lifecycle
   (start [this]
-    (let [textarea (async/chan)
-          killer (async/chan)]
-      (merge this {:textarea (room textarea killer)
-                   :killer killer})))
+    (merge this {:textarea (room (async/chan))}))
   (stop [this]
-    (async/put! killer :killllitttt)
     this))
 
 (defn rooms

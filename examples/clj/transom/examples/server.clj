@@ -46,5 +46,4 @@
 
 (defn server
   [port]
-  (map->Server
-    {:port port}))
+  (map->Server {:port port}))
