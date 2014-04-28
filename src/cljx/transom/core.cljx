@@ -5,13 +5,6 @@
   #+cljs
   (:require-macros [cljs.core.match.macros :refer [match]]))
 
-(defn count-op
-  [[o p]]
-  (case o
-    :retain p
-    :delete p
-    :insert (count p)))
-
 (defn count-before
   [edit]
   (letfn
@@ -167,8 +160,8 @@
           [[:retain _] [:delete _]] (conj out op2)
           ;; We need these cases for weird edge cases
           ;; e.g. (compose [[:delete 0]] [[:retain 0]])
-          [:nop   _     ] out
-          [_      :nop  ] out))]
+          [:nop _   ] out
+          [_    :nop] out))]
      (->> (align-compose edit1 edit2)
           (reduce compare-ops [])
           pack)))
@@ -178,15 +171,22 @@
 (defn transform-caret
   [caret edit]
   ;; caret is the little blinky line thing
-  ;; index is where we are in the document
+  ;; index is where we are in the (new?) document
   (assert (<= caret (count-before edit)))
-  (loop [caret caret, index 0, edit edit]
-    (if (or (<= caret index) (empty? edit))
-      caret
-      (let [op (first edit)
-            caret (case (first op)
-                    :retain caret
-                    :delete (- caret (second op))
-                    :insert (+ caret (count (second op))))
-            index (+ index (count-op op))]
-        (recur caret index (rest edit))))))
+  (letfn
+    [(count-op
+       [[o p]]
+       (case o
+         :retain p
+         :delete 0
+         :insert (count p)))]
+    (loop [caret caret, index 0, edit edit]
+      (if (or (< caret index) (empty? edit))
+        caret
+        (let [[o p :as op] (first edit)
+              caret (case o
+                      :retain caret
+                      :delete (max (- caret p) 0)
+                      :insert (+ caret (count p)))
+              index (+ index (count-op op))]
+          (recur caret index (rest edit)))))))

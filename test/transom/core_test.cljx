@@ -62,5 +62,6 @@
   (are [x y] (= x y)
     8 (transform-caret 5 [[:insert "foo"] [:retain 6]])
     2 (transform-caret 5 [[:delete 3] [:retain 10]])
-    5 (transform-caret 5 [[:retain 5] [:insert "foo"]])
-    4 (transform-caret 5 [[:retain 4] [:delete 1]])))
+    8 (transform-caret 5 [[:retain 5] [:insert "foo"]])
+    4 (transform-caret 5 [[:retain 4] [:delete 1]])
+    5 (transform-caret 8 [[:retain 4] [:delete 4] [:insert "m"] [:retain 4]])))
