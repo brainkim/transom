@@ -5,7 +5,7 @@
             [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
             [transom.core :as transom]
-            [transom.diff :refer [diff]]
+            [transom.diff :as diff]
             [transom.document :as document]
             [goog.dom :as gdom]
             [goog.dom.selection :as selection]
@@ -14,65 +14,29 @@
 
 (def ^:dynamic *sock* nil)
 (def ^:dynamic *id* nil)
+(def ^:dynamic *textarea* nil)
 
 (defn host
   []
   (.. js/window -location -host))
 
-(defn x-ray
-  [data]
-  (om/component
-    (dom/pre nil
-      (pr-str data))))
-
-(defn collab-textarea
-  [data owner]
-  (letfn
-    [(change [ev]
-       (let [doc (.. ev -target -value)]
-         (om/update! data [:doc] doc)
-         (om/update! data [:theirs] false)))
-     (select [ev]
-       (let [node (.-target ev)
-             start (selection/getStart node)
-             end (selection/getEnd node)]
-         (om/update! data [:selection] {:start start :end end})))]
-    (reify
-      om/IShouldUpdate
-      (should-update [_ props _]
-        (not= (:doc data) (:doc props)))
-      om/IDidUpdate
-      (did-update [_ props _]
-        (when (:theirs data)
-          (let [node (om/get-node owner "textarea")]
-            (selection/setStart node (get-in data [:selection :start]))
-            (selection/setEnd node (get-in data [:selection :end])))))
-      om/IRender
-      (render [_]
-        (dom/div nil
-          (dom/textarea #js {:disabled (nil? (:doc data))
-                             :value (or (:doc data) "")
-                             :ref "textarea"
-                             :autoFocus true
-                             :rows 50
-                             :cols 80
-                             :onChange change
-                             :onSelect select}))))))
-
-(defn app
-  [data owner]
-  (om/component
-    (dom/div nil
-      (om/build x-ray data)
-      (om/build collab-textarea data))))
-
 (defn initialize
   [inits !app-state !stage]
+  #_(println "initialize")
   (go
     (let [{:keys [id doc version]} (<! inits)]
       (set! *id* id)
       (swap! !app-state assoc :doc doc)
       (swap! !stage assoc :version version))))
+
+(defn debug
+  [prefix data]
+  (let [model (pr-str (@data :doc))
+        view  (pr-str (.-value *textarea*))]
+    (println prefix \newline
+             "agrees?" (pr-str (= model view)) \newline
+             "data:" model \newline
+             "dom:" view \newline)))
 
 (defn send-edit!
   [edit version]
@@ -98,6 +62,7 @@
 
 (defn acknowledge
   [edit version !stage]
+  #_(println "acknowledge" (pr-str edit))
   (swap! !stage
     (fn [{:keys [pending buffer]}]
       (assert (not (nil? pending)) "Received ack without anything pending")
@@ -110,16 +75,20 @@
 
 (defn patch
   [edit !app-state]
+  (debug "patch:str" !app-state)
   (swap! !app-state
     (fn [{:keys [doc selection]}]
       {:doc (transom/patch doc edit)
        :theirs true
        :selection
        {:start (transom/transform-caret (:start selection) edit)
-        :end (transom/transform-caret (:end selection) edit)}})))
+        :end (transom/transform-caret (:end selection) edit)}}))
+  (debug "patch:end" !app-state)
+  (js/setTimeout #(debug "patch:aft" !app-state) 0))
 
 (defn transform
   [edit version !app-state !stage]
+  #_(println "transform" (pr-str edit))
   (swap! !stage
     (fn [{:keys [pending buffer]}]
       (if (nil? pending)
@@ -137,13 +106,75 @@
 
 (defn receive
   [edits !app-state !stage]
-  (go-loop []
+  (go
     (when-let [message (<! edits)]
       (let [{:keys [edit version id]} message]
         (if (= id *id*)
           (acknowledge edit version !stage)
           (transform edit version !app-state !stage)))
-      (recur))))
+      (receive edits !app-state !stage))))
+
+(defn edit-distance
+  [edit]
+  (letfn
+    [(count-op
+       [[o p]]
+       (case o
+         :insert (count p)
+         :delete p
+         :retain 0))]
+    (reduce (fn [prev op] (+ prev (count-op op))) 0 edit)))
+
+(defn x-ray
+  [data]
+  (om/component
+    (dom/pre nil
+      (pr-str data))))
+
+(defn collab-textarea
+  [data owner]
+  (letfn
+    [(change [ev]
+       (debug "change:str" data)
+       (let [doc (.. ev -target -value)]
+         (println "change:evt" (pr-str doc))
+         (om/update! data [:doc] doc)
+         (om/update! data [:theirs] false))
+       (debug "change:end" data))
+     (select [ev]
+       (let [node (.-target ev)
+             start (selection/getStart node)
+             end (selection/getEnd node)]
+         (om/update! data [:selection] {:start start :end end})))]
+    (reify
+      om/IShouldUpdate
+      (should-update [_ props _]
+        (not= (:doc data) (:doc props)))
+      om/IDidUpdate
+      (did-update [_ props _]
+        (when (:theirs data)
+          (let [node (om/get-node owner "textarea")]
+            (selection/setStart node (get-in data [:selection :start]))
+            (selection/setEnd node (get-in data [:selection :end])))))
+      om/IRender
+      (render [_]
+        (dom/div nil
+          (dom/textarea #js {:disabled (nil? (:doc data))
+                             :value (or (:doc data) "")
+                             :ref "textarea"
+                             :autoFocus true
+                             :id "textarea"
+                             :rows 50
+                             :cols 80
+                             :onChange change
+                             :onSelect select}))))))
+
+(defn app
+  [data owner]
+  (om/component
+    (dom/div nil
+      (om/build x-ray data)
+      (om/build collab-textarea data))))
 
 (defn main
   []
@@ -160,6 +191,15 @@
               :tx-listen
               (fn [{:keys [old-value new-value path]} cursor]
                 (when (= path [:doc])
-                  (stage (diff old-value new-value) !stage)))})
-    (om/root x-ray !stage {:target (gdom/getElement "xray")})))
+                  (let [diff (diff/diff old-value new-value)
+                        ed (edit-distance diff)]
+                    (when (> ed 5)
+                      (println "INTERESTING DIFF"
+                               (pr-str {:old-value old-value
+                                        :new-value new-value
+                                        :edit-distance ed
+                                        :diff diff})))
+                    (stage diff !stage))))})
+    (om/root x-ray !stage {:target (gdom/getElement "xray")})
+    (set! *textarea* (gdom/getElement "textarea"))))
 (main)

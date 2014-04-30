@@ -1,0 +1,153 @@
+Client 1
+
+change:str 
+ agrees? false 
+ data: "\n\n\n" 
+ dom: "\n\n\na" 
+change:evt "\n\n\na"
+change:end 
+ agrees? true 
+ data: "\n\n\na" 
+ dom: "\n\n\na" 
+change:str 
+ agrees? false 
+ data: "\n\n\na" 
+ dom: "\n\n\nas" 
+change:evt "\n\n\nas"
+change:end 
+ agrees? true 
+ data: "\n\n\nas" 
+ dom: "\n\n\nas" 
+change:str 
+ agrees? false 
+ data: "\n\n\nas" 
+ dom: "\n\n\nasd" 
+change:evt "\n\n\nasd"
+change:end 
+ agrees? true 
+ data: "\n\n\nasd" 
+ dom: "\n\n\nasd" 
+patch:str 
+ agrees? true 
+ data: "\n\n\nasd" 
+ dom: "\n\n\nasd" 
+patch:end 
+ agrees? false 
+ data: "sdj\n\n\n" 
+ dom: "\n\n\nasd" 
+patch:aft 
+ agrees? true 
+ data: "sdj\n\n\n" 
+ dom: "sdj\n\n\n" 
+patch:str 
+ agrees? true 
+ data: "sdj\n\n\n" 
+ dom: "sdj\n\n\n" 
+patch:end 
+ agrees? false 
+ data: "skdj\n\n\n" 
+ dom: "sdj\n\n\n" 
+patch:aft 
+ agrees? true 
+ data: "skdj\n\n\n" 
+ dom: "skdj\n\n\n" 
+change:str 
+ agrees? false 
+ data: "skdj\n\n\n" 
+ dom: "skdj\n\n\nf" 
+change:evt "skdj\n\n\nf"
+change:end 
+ agrees? true 
+ data: "skdj\n\n\nf" 
+ dom: "skdj\n\n\nf" 
+patch:str 
+ agrees? true 
+ data: "skdj\n\n\nf" 
+ dom: "skdj\n\n\nf" 
+patch:end 
+ agrees? false 
+ data: "skldj\n\n\nf" 
+ dom: "skdj\n\n\nf" 
+patch:aft 
+ agrees? true 
+ data: "skldj\n\n\nf" 
+ dom: "skldj\n\n\nf" 
+
+Client 2:
+
+patch:str 
+ agrees? true 
+ data: "\n\n\n" 
+ dom: "\n\n\n" 
+patch:end 
+ agrees? false 
+ data: "\n\n\na" 
+ dom: "\n\n\n" 
+change:str 
+ agrees? false 
+ data: "\n\n\na" 
+ dom: "j\n\n\n" 
+change:evt "j\n\n\n"
+INTERESTING DIFF {:old-value "\n\n\na", :new-value "j\n\n\n", :edit-distance 8, :diff [[:delete 4] [:insert "j\n\n\n"]]}
+change:end 
+ agrees? true 
+ data: "j\n\n\n" 
+ dom: "j\n\n\n" 
+patch:aft 
+ agrees? true 
+ data: "j\n\n\n" 
+ dom: "j\n\n\n" 
+patch:str 
+ agrees? true 
+ data: "j\n\n\n" 
+ dom: "j\n\n\n" 
+patch:end 
+ agrees? false 
+ data: "j\n\n\ns" 
+ dom: "j\n\n\n" 
+patch:aft 
+ agrees? true 
+ data: "j\n\n\ns" 
+ dom: "j\n\n\ns" 
+change:str 
+ agrees? false 
+ data: "j\n\n\ns" 
+ dom: "jk\n\n\ns" 
+change:evt "jk\n\n\ns"
+change:end 
+ agrees? true 
+ data: "jk\n\n\ns" 
+ dom: "jk\n\n\ns" 
+patch:str 
+ agrees? true 
+ data: "jk\n\n\ns" 
+ dom: "jk\n\n\ns" 
+patch:end 
+ agrees? false 
+ data: "jk\n\n\nsd" 
+ dom: "jk\n\n\ns" 
+patch:aft 
+ agrees? true 
+ data: "jk\n\n\nsd" 
+ dom: "jk\n\n\nsd" 
+change:str 
+ agrees? false 
+ data: "jk\n\n\nsd" 
+ dom: "jkl\n\n\nsd" 
+change:evt "jkl\n\n\nsd"
+change:end 
+ agrees? true 
+ data: "jkl\n\n\nsd" 
+ dom: "jkl\n\n\nsd" 
+patch:str 
+ agrees? true 
+ data: "jkl\n\n\nsd" 
+ dom: "jkl\n\n\nsd" 
+patch:end 
+ agrees? false 
+ data: "jkl\n\n\nsdf" 
+ dom: "jkl\n\n\nsd" 
+patch:aft 
+ agrees? true 
+ data: "jkl\n\n\nsdf" 
+ dom: "jkl\n\n\nsdf" 

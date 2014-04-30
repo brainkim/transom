@@ -173,20 +173,25 @@
   ;; caret is the little blinky line thing
   ;; index is where we are in the (new?) document
   (assert (<= caret (count-before edit)))
-  (letfn
-    [(count-op
-       [[o p]]
-       (case o
-         :retain p
-         :delete 0
-         :insert (count p)))]
-    (loop [caret caret, index 0, edit edit]
-      (if (or (< caret index) (empty? edit))
-        caret
-        (let [[o p :as op] (first edit)
-              caret (case o
-                      :retain caret
-                      :delete (max (- caret p) 0)
-                      :insert (+ caret (count p)))
-              index (+ index (count-op op))]
-          (recur caret index (rest edit)))))))
+  (loop [caret caret, index 0, edit edit]
+    (if (empty? edit)
+      caret
+      (let [[o p :as op] (first edit)]
+        (case o
+          :retain
+          (recur caret
+                 (+ index p)
+                 (rest edit))
+          :delete
+          (recur (if (> caret index)
+                   (max (- caret p) 0)
+                   caret)
+                 index
+                 (rest edit))
+          :insert
+          (let [op-len (count p)]
+            (recur (if (>= caret index)
+                     (+ caret op-len)
+                     caret)
+                   (+ index op-len)
+                   (rest edit))))))))
