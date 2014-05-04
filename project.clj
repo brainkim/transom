@@ -26,10 +26,7 @@
               ;clj
               :repl-options {:nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
               :source-paths ["examples/clj"]
-              :jvm-opts ^:replace ["-server"
-                                   ;;"-Xms3072m"
-                                   ;;"-Xmx3072m"
-                                   "-Xmx1g"]
+              :jvm-opts ^:replace ["-server" "-Xms3072m" "-Xmx3072m"]
               :cljx
               {:builds [{:source-paths ["src/cljx"]
                          :output-path "target/classes"

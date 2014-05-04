@@ -22,21 +22,13 @@
 
 (defn initialize
   [inits !app-state !stage]
-  #_(println "initialize")
   (go
-    (let [{:keys [id doc version]} (<! inits)]
-      (set! *id* id)
-      (swap! !app-state assoc :doc doc)
-      (swap! !stage assoc :version version))))
-
-(defn debug
-  [prefix data]
-  (let [model (pr-str (@data :doc))
-        view  (pr-str (.-value *textarea*))]
-    (println prefix \newline
-             "agrees?" (pr-str (= model view)) \newline
-             "data:" model \newline
-             "dom:" view \newline)))
+    (when-let [message (<! inits)]
+      (let [{:keys [id doc version]} message]
+        (set! *id* id)
+        (swap! !app-state assoc :doc doc)
+        (swap! !stage assoc :version version))
+      message)))
 
 (defn send-edit!
   [edit version]
@@ -49,20 +41,14 @@
       (if (nil? pending)
         (do
           (send-edit! edit version)
-          {:version version
-           :pending edit
-           :buffer nil})
+          {:version version :pending edit :buffer nil})
         (if (nil? buffer)
-          {:version version
-           :pending pending
-           :buffer edit}
-          {:version version
-           :pending pending
+          {:version version :pending pending :buffer edit}
+          {:version version :pending pending
            :buffer (transom/compose buffer edit)})))))
 
 (defn acknowledge
   [edit version !stage]
-  #_(println "acknowledge" (pr-str edit))
   (swap! !stage
     (fn [{:keys [pending buffer]}]
       (assert (not (nil? pending)) "Received ack without anything pending")
@@ -75,32 +61,28 @@
 
 (defn patch
   [edit !app-state]
-  (debug "patch:str" !app-state)
   (swap! !app-state
     (fn [{:keys [doc selection]}]
       {:doc (transom/patch doc edit)
        :theirs true
        :selection
        {:start (transom/transform-caret (:start selection) edit)
-        :end (transom/transform-caret (:end selection) edit)}}))
-  (debug "patch:end" !app-state)
-  (js/setTimeout #(debug "patch:aft" !app-state) 0))
+        :end (transom/transform-caret (:end selection) edit)}})))
 
 (defn transform
   [edit version !app-state !stage]
-  #_(println "transform" (pr-str edit))
   (swap! !stage
     (fn [{:keys [pending buffer]}]
       (if (nil? pending)
         (do
           (patch edit !app-state)
           {:version version :pending nil :buffer nil})
-        (let [[pending' edit'] (transom/transform pending edit)]
+        (let [[edit' pending'] (transom/transform edit pending)]
           (if (nil? buffer)
             (do
               (patch edit' !app-state)
               {:version version :pending pending' :buffer nil})
-            (let [[buffer' edit''] (transom/transform buffer edit')]
+            (let [[edit'' buffer'](transom/transform edit' buffer)]
               (patch edit'' !app-state)
               {:version version :pending pending' :buffer buffer'})))))))
 
@@ -112,6 +94,8 @@
         (if (= id *id*)
           (acknowledge edit version !stage)
           (transform edit version !app-state !stage)))
+      ;; Force rerender. `render-all` is a private var
+      (om/render-all) 
       (receive edits !app-state !stage))))
 
 (defn edit-distance
@@ -135,12 +119,9 @@
   [data owner]
   (letfn
     [(change [ev]
-       (debug "change:str" data)
        (let [doc (.. ev -target -value)]
-         (println "change:evt" (pr-str doc))
          (om/update! data [:doc] doc)
-         (om/update! data [:theirs] false))
-       (debug "change:end" data))
+         (om/update! data [:theirs] false)))
      (select [ev]
        (let [node (.-target ev)
              start (selection/getStart node)
@@ -181,7 +162,10 @@
   (set! *sock* (socket (str "ws://" (host) "/ws/textarea")))
   (let [!app-state (atom {:doc nil :selection {:start 0 :end 0}})
         !stage (atom {:pending nil :buffer nil :version nil})
-        sock-pub (async/pub (async/map< read-string *sock*) :type)
+        sock-pub (async/pub (async/map< (fn [message]
+                                          (println message)
+                                          (read-string message))
+                                        *sock*) :type)
         inits (async/sub sock-pub :init (chan))
         edits (async/sub sock-pub :edit (chan))]
     (initialize inits !app-state !stage)
@@ -193,12 +177,6 @@
                 (when (= path [:doc])
                   (let [diff (diff/diff old-value new-value)
                         ed (edit-distance diff)]
-                    (when (> ed 5)
-                      (println "INTERESTING DIFF"
-                               (pr-str {:old-value old-value
-                                        :new-value new-value
-                                        :edit-distance ed
-                                        :diff diff})))
                     (stage diff !stage))))})
     (om/root x-ray !stage {:target (gdom/getElement "xray")})
     (set! *textarea* (gdom/getElement "textarea"))))

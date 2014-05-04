@@ -172,7 +172,7 @@
   [caret edit]
   ;; caret is the little blinky line thing
   ;; index is where we are in the (new?) document
-  (assert (<= caret (count-before edit)))
+  #_(assert (<= caret (count-before edit)))
   (loop [caret caret, index 0, edit edit]
     (if (empty? edit)
       caret
