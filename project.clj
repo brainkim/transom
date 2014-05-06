@@ -10,7 +10,7 @@
   :source-paths ["src/cljx"]
   :test-paths ["target/test-classes"]
   :profiles {:dev
-             {:dependencies [[om "0.5.3"]
+             {:dependencies [[om "0.6.2"]
                              [ring/ring "1.2.1"]
                              [compojure "1.1.6"]
                              [fogus/ring-edn "0.2.0"]
