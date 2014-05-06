@@ -14,7 +14,6 @@
 
 (def ^:dynamic *sock* nil)
 (def ^:dynamic *id* nil)
-(def ^:dynamic *textarea* nil)
 
 (defn host
   []
@@ -23,11 +22,10 @@
 (defn initialize
   [inits !app-state !stage]
   (go
-    (when-let [message (<! inits)]
-      (let [{:keys [id doc version]} message]
-        (set! *id* id)
-        (swap! !app-state assoc :doc doc)
-        (swap! !stage assoc :version version))
+    (when-let [{:keys [id doc version] :as message} (<! inits)]
+      (set! *id* id)
+      (swap! !app-state assoc :doc doc)
+      (swap! !stage assoc :version version)
       message)))
 
 (defn send-edit!
@@ -95,7 +93,7 @@
           (acknowledge edit version !stage)
           (transform edit version !app-state !stage)))
       ;; Force rerender. `render-all` is a private var
-      (om/render-all) 
+      (om/render-all)
       (receive edits !app-state !stage))))
 
 (defn edit-distance
@@ -178,6 +176,5 @@
                   (let [diff (diff/diff old-value new-value)
                         ed (edit-distance diff)]
                     (stage diff !stage))))})
-    (om/root x-ray !stage {:target (gdom/getElement "xray")})
-    (set! *textarea* (gdom/getElement "textarea"))))
+    (om/root x-ray !stage {:target (gdom/getElement "xray")})))
 (main)

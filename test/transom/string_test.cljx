@@ -1,7 +1,11 @@
-(ns transom.core-test
+(ns transom.string-test
   #+clj
   (:require [clojure.test :refer :all]
-            [transom.core :refer :all]))
+            [clojure.test.check.clojure-test :refer [defspec]]
+            [clojure.test.check :as check]
+            [clojure.test.check.generators :as gen]
+            [clojure.test.check.properties :as prop]  
+            [transom.string :refer :all]))
 
 (deftest count-test
   (let [edit [[:retain 2] [:delete 1] [:insert "foo"]]]
@@ -65,3 +69,47 @@
     8 (transform-caret 5 [[:retain 5] [:insert "foo"]])
     4 (transform-caret 5 [[:retain 4] [:delete 1]])
     5 (transform-caret 8 [[:retain 4] [:delete 4] [:insert "m"] [:retain 4]])))
+
+(deftest diff-test
+  (are [x y] (= x y)
+    (diff "foo" "bar") [[:delete 3] [:insert "bar"]]
+    (diff "foo" "food") [[:retain 3] [:insert "d"]]
+    (diff "ood" "good") [[:insert "g"] [:retain 3]]
+    (diff "good" "ood") [[:delete 1] [:retain 3]]
+    (diff "pizza" "pa") [[:retain 1] [:delete 3] [:retain 1]]
+    (diff "asdf" "asf") [[:retain 2] [:delete 1] [:retain 1]]
+    (diff "brian" "brain") [[:retain 2] [:delete 2] [:insert "ai"] [:retain 1]]
+    (diff "moo" "mooo") [[:retain 3] [:insert "o"]]
+    (diff "oo" "ooo") [[:retain 2] [:insert "o"]]
+    (diff "ooo" "oo") [[:retain 2] [:delete 1]]))
+
+(defspec patching-diffs
+  1000
+  (prop/for-all [s1 gen/string-ascii
+                 s2 gen/string-ascii]
+    (let [diff1 (diff s1 s2)
+          diff2 (diff s2 s1)]
+      (and (= (patch s1 diff1) s2)
+           (= (patch s2 diff2) s1)))))
+
+(defspec composing-edits
+  1000
+  (prop/for-all [s1 gen/string-ascii
+                 s2 gen/string-ascii
+                 s3 gen/string-ascii]
+    (let [edit1 (diff s1 s2)
+          edit2 (diff s2 s3)]
+      (= s3
+         (patch s1 edit1 edit2)
+         (patch s1 (compose edit1 edit2))))))
+
+(defspec transforming-edits
+  1000
+  (prop/for-all [s1 gen/string-ascii
+                 s2 gen/string-ascii
+                 s3 gen/string-ascii]
+    (let [edit1 (diff s1 s2)
+          edit2 (diff s1 s3)
+          [edit1' edit2'] (transform edit1 edit2)]
+      (= (patch s1 edit1 edit2')
+         (patch s1 edit2 edit1')))))

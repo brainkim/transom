@@ -2,8 +2,16 @@
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
-            [cljs.core.async :refer [<! chan put! sliding-buffer]]))
+            [cljs.core.async :refer [<! chan put! sliding-buffer]]
+            [transom.core :as transom]
+            [transom.string :as tstr]
+            [transom.indexed :as indexed]))
 (enable-console-print!)
+
+(defn x-ray
+  [data owner]
+  (om/component
+    (dom/pre nil (pr-str data))))
 
 (defn counter
   [data owner {:keys [parent]}]
@@ -11,18 +19,14 @@
     om/IRender
     (render [_]
       (letfn
-        [(inc-click [_]
-           (om/transact! data [:count] inc))
-         (dec-click [_]
-           (om/transact! data [:count] dec))
+        [(change [ev]
+           (om/update! data [:value] (.. ev -target -value)))
          (delete-click [_]
-           (om/transact! parent [:counters]
+           (om/transact! parent []
              (fn [counters] (into [] (remove #(= (:id %) (:id @data)) counters)))))]
         (dom/div nil
-          (dom/div nil
-            (str (:id data) " -> " (:count data)))
-          (dom/button #js {:onClick inc-click} "+")
-          (dom/button #js {:onClick dec-click} "-")
+          (dom/input #js {:value (data :value)
+                          :onChange change})
           (dom/button #js {:onClick delete-click} "x"))))))
 
 (defn counter-view
@@ -36,12 +40,14 @@
         (apply dom/div nil
           (dom/h1 #js {:key "head"} "Counters")
           (dom/button #js {:key "add" :onClick add-click} "Add")
-          (om/build-all counter (:counters data) {:key :id
-                                                  :opts {:parent data}}))))))
+          (om/build-all counter (data :counters) {:key :id
+                                                  :opts {:parent (data :counters)}}))))))
 
-(def app-state (atom {:counters (into [] (map (fn [n] {:id n :count 0}) (range 10)))}))
+(def app-state (atom {:counters (vec (map (fn [n] {:id n :value ""}) (range 10)))}))
 
 (om/root counter-view app-state
   {:target (.getElementById js/document "app")
-   :tx-listen (fn [{:keys [path old-value new-value new-state]} cursor]
-                (println new-state))})
+   :tx-listen (fn [{:keys [path old-value new-value]}]
+                (println path))})
+
+(om/root x-ray app-state {:target (.getElementById js/document "xray")})
