@@ -1,9 +1,16 @@
 (ns transom.protocols)
 
-(defprotocol EditRebase
-  (rebase [this edit1 edit2])
-  (rebase-path [this edit path]))
+(defprotocol Patchable
+  (patch [this edit]))
 
-(defprotocol EditCompose
-  (compose [this edit1 edit2])
-  (compose-path [this edit path]))
+(defprotocol Diffable
+  (diff [this that]))
+
+(defprotocol WithRebaseableEdit
+  (rebase [this edit1 edit2]))
+
+(defprotocol WithRebaseableKey
+  (rebase-key [this key edit destructive?]))
+
+(defprotocol WithComposableEdit
+  (compose [this edit1 edit2]))

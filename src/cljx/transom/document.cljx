@@ -1,5 +1,5 @@
 (ns transom.document
-  (:require [transom.core :as transom]))
+  (:require [transom.string :as transom]))
 
 (defprotocol IDocument
   (value [this])
@@ -16,7 +16,7 @@
   (transform-edit [this edit last-seen]
     (if (< last-seen (version this))
       ;; transform always starts with past-edit
-      (reduce (fn [edit past-edit] (second (transom/transform past-edit edit)))
+      (reduce (fn [their-edit our-edit] (second (transom/transform our-edit their-edit)))
               edit (subvec history last-seen))
       edit))
   (patch [this edit]

@@ -1,4 +1,4 @@
-(ns transom.indexed
+(ns transom.sequential
   (:require
       #+clj [clojure.core.match :refer [match]]
      #+cljs [cljs.core.match])
@@ -6,7 +6,7 @@
   (:require-macros [cljs.core.match.macros :refer [match]]))
 
 (defn ^:private count-before
-  [{:keys [edit]}]
+  [edit]
   (letfn
     [(inc-count
       [c [o p]]
@@ -17,7 +17,7 @@
     (reduce inc-count 0 edit)))
 
 (defn ^:private count-after
-  [{:keys [edit]}]
+  [edit]
   (letfn
     [(inc-count
       [c [o p]]
@@ -28,25 +28,25 @@
     (reduce inc-count 0 edit)))
 
 (defn patch
-  ([doc {:keys [edit]}]
+  ([doc edit]
     (assert (= (count doc) (count-before edit))
             (str "transom/patch: length mismatch" \newline
                  "Doc: " doc \newline
                  "Edit: " edit))
     (loop [doc doc, edit edit, out nil]
       (if (empty? edit)
-        out
+        (vec out)
         (let [[o p] (first edit)
               r (rest edit)]
           (case o
             :retain (recur (drop p doc) r (concat out (take p doc)))
             :delete (recur (drop p doc) r out)
             :insert (recur doc r (concat out p)))))))
-  ([doc operation & operations]
-    (reduce patch (patch doc operation) operations)))
+  ([doc edit & edits]
+    (reduce patch (patch doc edit) edits)))
 
 (defn pack
-  [{:keys [edit]}]
+  [edit]
   (letfn
     [(nop?
       [op]
@@ -71,8 +71,8 @@
          :else [cop (conj edit' pop)]))]
     (let [[pop edit'] (reduce reducer [nil []] edit)]
       (if (nil? pop)
-        {:edit edit'}
-        {:edit (conj edit' pop)}))))
+        edit'
+        (conj edit' pop)))))
 
 (defn pack-pairs
   [pairs]
@@ -101,7 +101,7 @@
                       (conj out [[o1 p2] op2]))))))))
 
 (defn transform
-  [{edit1 :edit path1 :path} {edit2 :edit path2 :path}]
+  [edit1 edit2]
   (assert (= (count-before edit1) (count-before edit2))
           (str "transom/transform: length mismatch" \newline
                "Edit 1: " edit1 \newline
@@ -132,7 +132,7 @@
 
         :else
         (let [[o1 p1] op1
-              p1' (if (seq? p1) (count p1) p1)
+              p1' (if (counted? p1) (count p1) p1)
               [o2 p2] op2]
           (case (compare p1' p2)
             -1
@@ -166,8 +166,8 @@
            [[:retain _] [:delete _]] (conj out op2)
            ;; We need these cases for weird edge cases
            ;; e.g. (compose [[:delete 0]] [[:retain 0]])
-           [:nop _   ] out
-           [_    :nop] out))]
+           [:nop        _          ] out
+           [_           :nop       ] out))]
       (->> (align-compose edit1 edit2)
            (reduce compare-ops [])
            pack)))
@@ -175,29 +175,26 @@
     (reduce compose (compose edit1 edit2) more)))
 
 (defn transform-key
-  [key edit]
+  [key edit destructive?]
   (loop [key key, index 0, edit edit]
-    (if (empty? edit)
-      key
-      (let [[o p :as op] (first edit)]
-        (case o
-          :retain
-          (recur key
-                 (+ index p)
-                 (rest edit))
-          :delete
-          (recur (if (> key index)
-                   (max (- key p) 0)
-                   key)
-                 index
-                 (rest edit))
-          :insert
-          (let [edit-count (count p)]
-            (recur (if (>= key index)
-                     (+ key edit-count)
-                     key)
-                   (+ index edit-count)
-                   (rest edit))))))))
+    (if-let [[o p] (first edit)]
+      (case o
+        :retain
+        (recur key (+ index p) (rest edit))
+
+        :delete
+        (if (>= key index)
+          (cond
+            (> (- key index) p) (recur (- key p) index (rest edit))
+            (not destructive?) 0)
+          (recur key index (rest edit)))
+
+        :insert
+        (let [p (count p)]
+          (if (>= key index)
+            (recur (+ key p) (+ index p) (rest edit))
+            (recur key (+ index p) (rest edit)))))
+      key)))
 
 (defn ^:private common-prefix
   [a b]
@@ -220,16 +217,15 @@
 
 (defn ^:private create-edit
   [a b pre suf]
-  (println (pr-str {:a a :b b :pre pre :suf suf}))
-  (pack {:edit [[:retain pre]
-                [:delete (- (count a) pre suf)]
-                [:insert (subvec b pre (- (count b) suf))]
-                [:retain suf]]}))
+  (pack [[:retain pre]
+         [:delete (- (count a) pre suf)]
+         [:insert (subvec b pre (- (count b) suf))]
+         [:retain suf]]))
 
 (defn diff
   [a b]
   (if (= a b)
-    {:edit [[:retain (count a)]]}
+    [[:retain (count a)]]
     (let [a (vec a)
           b (vec b)
           pre (common-prefix a b)
