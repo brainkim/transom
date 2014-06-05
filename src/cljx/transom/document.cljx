@@ -15,7 +15,6 @@
     (transform-edit this edit (version this)))
   (transform-edit [this edit last-seen]
     (if (< last-seen (version this))
-      ;; transform always starts with past-edit
       (reduce (fn [their-edit our-edit] (second (transom/transform our-edit their-edit)))
               edit (subvec history last-seen))
       edit))

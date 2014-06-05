@@ -16,13 +16,6 @@
   (patch [this edit]
     (vector/patch this edit)))
 
-(defn patch
-  [doc edit-map]
-  (reduce
-    (fn [state [path edit]] (update-in state path impl/patch edit))
-    doc
-    (sort-by path/generality edit-map)))
-
 (extend-protocol impl/Diffable
   #+clj java.lang.String
   #+cljs string
@@ -33,10 +26,15 @@
   (diff [this edit]
     (vector/diff this edit)))
 
-(def diff impl/diff)
-
-(defn rebase
-  [doc our-edit-map their-edit-map])
+(extend-protocol impl/WithRebaseableEdit
+  #+clj java.lang.String
+  #+cljs string
+  (rebase [this our-edit their-edit]
+    nil)
+  
+  PersistentVector
+  (rebase [this our-edit their-edit]
+    nil))
 
 (extend-protocol impl/WithRebaseableKey
   #+clj java.lang.String
@@ -58,30 +56,41 @@
   (compose [this old-edit new-edit]
     (vector/compose old-edit new-edit))) 
 
-(defn compose*
+(defn patch
+  [doc edit-map]
+  (reduce
+    (fn [state [path edit]] (update-in state path impl/patch edit))
+    doc
+    (sort-by path/generality edit-map)))
+
+(def diff impl/diff)
+
+(defn rebase-pair
+  [doc our-edit-map [their-path their-edit]])
+
+(defn rebase
+  [doc our-edit-map their-edit-map]) 
+
+(defn compose-pair
   [doc old-edit-map [new-path new-edit]]
   (let
     [edit-map
-     (for [[old-path old-edit :as old-pair] old-edit-map]
-       (cond
-         (= old-path new-path)
-         [old-path (impl/compose (get-in doc new-path) old-edit new-edit)]
+     (into {}
+       (for [[old-path old-edit :as old-pair] old-edit-map]
+         (cond
+           (= old-path new-path)
+           [old-path (impl/compose (get-in doc new-path) old-edit new-edit)]
 
-         (path/prefix? new-path old-path)
-         (let [suffix (path/suffix new-path old-path)]
-           (when-let [rebased-key (impl/rebase-key (get-in doc new-path)
-                                                   (first suffix)
-                                                   new-edit
-                                                   true)]
-             [(concat new-path (cons rebased-key (rest suffix))) old-edit]))
+           (path/prefix? new-path old-path)
+           (let [suffix (path/suffix new-path old-path)]
+             (when-let [rebased-key (impl/rebase-key (get-in doc new-path) (first suffix) new-edit true)]
+               [(concat new-path (cons rebased-key (rest suffix))) old-edit]))
 
-         :else
-         old-pair))
-
-     edit-map (into {} edit-map)]
+           :else old-pair)))]
     (if (contains? edit-map new-path)
       edit-map
       (assoc edit-map new-path new-edit))))
 
 (defn compose
-  [doc old-edit-map new-edit-map])
+  [doc old-edit-map new-edit-map]
+  (reduce (partial compose-pair doc) old-edit-map new-edit-map))

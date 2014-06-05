@@ -59,7 +59,7 @@
        (match [op1 op2]
          [[:retain p1] [:retain p2]] [:retain (+ p1 p2)]
          [[:delete p1] [:delete p2]] [:delete (+ p1 p2)]
-         [[:insert p1] [:insert p2]] [:insert (concat p1 p2)]))
+         [[:insert p1] [:insert p2]] [:insert (vec (concat p1 p2))]))
      (reducer
        ;; pop as in previous op
        ;; cop as in current op
@@ -132,20 +132,23 @@
 
         :else
         (let [[o1 p1] op1
-              p1' (if (counted? p1) (count p1) p1)
+              p1' (if (sequential? p1) (count p1) p1)
               [o2 p2] op2]
           (case (compare p1' p2)
             -1
-            (recur (rest edit1) (cons [o2 (- p2 p1')] (rest edit2))
+            (recur (rest edit1)
+                   (cons [o2 (- p2 p1')] (rest edit2))
                    (conj out [op1 [o2 p1']]))
             0
-            (recur (rest edit1) (rest edit2)
+            (recur (rest edit1)
+                   (rest edit2)
                    (conj out [op1 op2]))
             1
-            (let [[left taken] (if (seq? p1)
+            (let [[left taken] (if (sequential? p1)
                                  [(drop p2 p1) (take p2 p1)]
                                  [(- p1 p2) p2])]
-              (recur (cons [o1 left] (rest edit1)) (rest edit2)
+              (recur (cons [o1 left] (rest edit1))
+                     (rest edit2)
                      (conj out [[o1 taken] op2])))))))))
 
 (defn compose
@@ -185,7 +188,7 @@
         :delete
         (if (>= key index)
           (cond
-            (> (- key index) p) (recur (- key p) index (rest edit))
+            (>= (- key index) p) (recur (- key p) index (rest edit))
             (not destructive?) 0)
           (recur key index (rest edit)))
 

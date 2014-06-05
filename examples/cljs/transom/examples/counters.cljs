@@ -43,30 +43,28 @@
                          :opts {:parent-data (get data :counters)}}))))))
 
 (def app-state {:counters (mapv (fn [n] {:id n :value ""}) (range 10))})
-
+(def !app-state (atom app-state))
 (def !composed (atom {}))
-(println "hello?")
 
 (defn tx-listener
   [{:keys [path old-value new-value old-state new-state]}]
   (let [edit-map {path (transom/diff old-value new-value)}
         state (transom/patch old-state edit-map)]
-    (swap! !composed #(transom/compose* old-state
-                                        %
-                                        [(seq path) (transom/diff old-value new-value)]))
-    (println "hello")
-    (println @!composed)
-    (assert (= state new-state)
-            (str (pr-str state) \newline
-                 (pr-str new-state)))))
-
-(om/root
-  x-ray
-  app-state
-  {:target (.getElementById js/document "xray")})
+    (swap! !composed #(transom/compose old-state % edit-map))
+    (let [complete-state (transom/patch app-state @!composed)]
+      (println (pr-str complete-state))
+      (assert (= new-state state complete-state)
+              (str (pr-str new-state) \newline
+                   (pr-str state) \newline
+                   (pr-str complete-state))))))
 
 (om/root
   counter-view
-  app-state
+  !app-state
   {:target (.getElementById js/document "app")
    :tx-listen tx-listener})
+
+(om/root
+  x-ray
+  !app-state
+  {:target (.getElementById js/document "xray")})
