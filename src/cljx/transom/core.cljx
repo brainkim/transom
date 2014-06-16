@@ -1,6 +1,6 @@
 (ns transom.core
-  (:require [transom.protocols :as impl :refer [Diffable]]
-            [transom.path :as path] 
+  (:require [clojure.set :as set]
+            [transom.protocols :as impl :refer [Diffable]]
             [transom.string :as string]
             [transom.sequential :as vector])
   #+clj
@@ -26,17 +26,7 @@
   (diff [this edit]
     (vector/diff this edit)))
 
-(extend-protocol impl/WithRebaseableEdit
-  #+clj java.lang.String
-  #+cljs string
-  (rebase [this our-edit their-edit]
-    nil)
-  
-  PersistentVector
-  (rebase [this our-edit their-edit]
-    nil))
-
-(extend-protocol impl/WithRebaseableKey
+(extend-protocol impl/WithRebasableKey
   #+clj java.lang.String
   #+cljs string
   (rebase-key [this key edit destructive?]
@@ -54,43 +44,101 @@
 
   PersistentVector
   (compose [this old-edit new-edit]
-    (vector/compose old-edit new-edit))) 
+    (vector/compose old-edit new-edit)))
+
+(extend-protocol impl/WithTransformableEdit
+  #+clj java.lang.String
+  #+cljs string
+  (transform [this our-edit their-edit]
+    (string/transform our-edit their-edit))
+  
+  PersistentVector
+  (rebase [this our-edit their-edit]
+    (vector/transform our-edit their-edit)))
 
 (defn patch
-  [doc edit-map]
-  (reduce
-    (fn [state [path edit]] (update-in state path impl/patch edit))
-    doc
-    (sort-by path/generality edit-map)))
+  ([doc edit-map]
+    (reduce
+      (fn [state [path edit]] (update-in state path impl/patch edit))
+      doc
+      (sort-by (comp count key) edit-map)))
+  ([doc edit-map & edit-maps]
+    (reduce patch (patch doc edit-map) edit-maps)))
 
 (def diff impl/diff)
 
-(defn rebase-pair
-  [doc our-edit-map [their-path their-edit]])
+;; clojure.set/rename-keys is buggy in clojurescript :/
+(defn rename-keys
+  [map kmap]
+  (reduce
+    (fn [m [old new]]
+      (if (contains? map old)
+        (assoc m new (get map old))
+        m))
+    (apply dissoc map (keys kmap))
+    kmap))
 
-(defn rebase
-  [doc our-edit-map their-edit-map]) 
+(defn rename-keys-with
+  [f m]
+  (let [kmap (reduce (fn [kmap k] (assoc kmap k (f k))) {} (keys m))]
+    (rename-keys m kmap)))
 
-(defn compose-pair
-  [doc old-edit-map [new-path new-edit]]
-  (let
-    [edit-map
-     (into {}
-       (for [[old-path old-edit :as old-pair] old-edit-map]
-         (cond
-           (= old-path new-path)
-           [old-path (impl/compose (get-in doc new-path) old-edit new-edit)]
+(defn prefixes?
+  [path-1 path-2]
+  (and (< (count path-1) (count path-2))
+       (= path-1 (subvec path-2 0 (count path-1)))))
 
-           (path/prefix? new-path old-path)
-           (let [suffix (path/suffix new-path old-path)]
-             (when-let [rebased-key (impl/rebase-key (get-in doc new-path) (first suffix) new-edit true)]
-               [(concat new-path (cons rebased-key (rest suffix))) old-edit]))
+(defn rebase-path-keys
+  [doc old new]
+  (letfn
+    [(rebase-path
+       [old-path new-path]
+       (let [state (get-in doc new-path)
+             new-edit (get new new-path)
+             key-index (count new-path)
+             key (nth old-path key-index)]
+         (when-let [rebased-key (impl/rebase-key state key new-edit true)]
+           (assoc old-path key-index rebased-key))))
+     (path-fn
+       [path]
+       (reduce (fn [path new-path]
+                 (when path
+                   (when-let [path' (rebase-path path new-path)]
+                     path')))
+               path
+               (filter #(prefixes? % path) (keys new))))]
+    (-> (rename-keys-with path-fn old)
+        (dissoc nil))))
 
-           :else old-pair)))]
-    (if (contains? edit-map new-path)
-      edit-map
-      (assoc edit-map new-path new-edit))))
+(defn shared-keys
+  [m1 m2]
+  (set/intersection (set (keys m1)) (set (keys m2))))
 
 (defn compose
-  [doc old-edit-map new-edit-map]
-  (reduce (partial compose-pair doc) old-edit-map new-edit-map))
+  [doc old new]
+  (let [rebased (rebase-path-keys doc old new)]
+    (reduce
+      (fn [rebased [new-path new-edit :as new-entry]]
+        (if (contains? rebased new-path)
+          (assoc rebased new-path (impl/compose (get-in doc new-path)
+                                                (get rebased new-path)
+                                                new-edit))
+          
+          (conj rebased new-entry)))
+      rebased
+      new)))
+
+(defn transform
+  [doc ours theirs]
+  (let [ours' (rebase-path-keys doc ours theirs)
+        theirs' (rebase-path-keys doc theirs ours)
+        shared-paths (shared-keys ours' theirs')]
+    (reduce
+      (fn [[ours theirs] path]
+        (let [state (get-in doc path)
+              our-edit (get ours path)
+              their-edit (get theirs path)
+              [our-edit' their-edit'] (impl/transform state our-edit their-edit)]
+          [(assoc ours path our-edit') (assoc theirs path their-edit')]))
+      [ours' theirs']
+      shared-paths)))

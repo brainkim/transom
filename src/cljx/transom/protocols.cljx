@@ -6,11 +6,11 @@
 (defprotocol Diffable
   (diff [this that]))
 
-(defprotocol WithRebaseableEdit
-  (rebase [this edit1 edit2]))
-
-(defprotocol WithRebaseableKey
+(defprotocol WithRebasableKey
   (rebase-key [this key edit destructive?]))
+
+(defprotocol WithTransformableEdit
+  (transform [this edit1 edit2]))
 
 (defprotocol WithComposableEdit
   (compose [this edit1 edit2]))
