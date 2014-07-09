@@ -1,6 +1,5 @@
-(ns transom.property-test
+(ns transom.indexed-test
   (:require [transom.core :as transom]
-            [transom.diff :as diff]
             [clojure.test :refer :all]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check :as check]
