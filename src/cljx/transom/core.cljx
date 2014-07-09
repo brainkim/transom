@@ -67,78 +67,75 @@
 
 (def diff impl/diff)
 
-;; clojure.set/rename-keys is buggy in clojurescript :/
-(defn rename-keys
-  [map kmap]
-  (reduce
-    (fn [m [old new]]
-      (if (contains? map old)
-        (assoc m new (get map old))
-        m))
-    (apply dissoc map (keys kmap))
-    kmap))
-
-(defn rename-keys-with
-  [f m]
-  (let [kmap (reduce (fn [kmap k] (assoc kmap k (f k))) {} (keys m))]
-    (rename-keys m kmap)))
-
 (defn prefixes?
   [path-1 path-2]
   (and (< (count path-1) (count path-2))
        (= path-1 (subvec path-2 0 (count path-1)))))
 
-(defn rebase-path-keys
+(defn mappings-for
   [doc old new]
-  (letfn
-    [(rebase-path
-       [old-path new-path]
-       (let [state (get-in doc new-path)
-             new-edit (get new new-path)
-             key-index (count new-path)
-             key (nth old-path key-index)]
-         (when-let [rebased-key (impl/rebase-key state key new-edit true)]
-           (assoc old-path key-index rebased-key))))
-     (path-fn
-       [path]
-       (reduce (fn [path new-path]
-                 (when path
-                   (when-let [path' (rebase-path path new-path)]
-                     path')))
-               path
-               (filter #(prefixes? % path) (keys new))))]
-    (-> (rename-keys-with path-fn old)
-        (dissoc nil))))
-
-(defn shared-keys
-  [m1 m2]
-  (set/intersection (set (keys m1)) (set (keys m2))))
+  (into {}
+    (for [[new-path new-edit] new
+          old-path (filter #(prefixes? new-path %) (keys old))]
+      (let [state (get-in doc new-path)
+            key-index (count new-path)
+            key (nth old-path key-index)
+            rebased-key (impl/rebase-key state key new-edit true)
+            rebased-path (when rebased-key (assoc old-path key-index rebased-key))]
+        [old-path rebased-path]))))
 
 (defn compose
-  [doc old new]
-  (let [rebased (rebase-path-keys doc old new)]
-    (reduce
-      (fn [rebased [new-path new-edit :as new-entry]]
-        (if (contains? rebased new-path)
-          (assoc rebased new-path (impl/compose (get-in doc new-path)
-                                                (get rebased new-path)
-                                                new-edit))
-          
-          (conj rebased new-entry)))
-      rebased
-      new)))
+  ;; for each entry of new,
+  ;; rebase the paths of any entries in old which are prefixed by the new entry
+  ;; then (and?)
+  ;; for each entry of new
+  ;; if the entry in new conflicts with an entry in old, 
+  ;;   compose the edits in old,
+  ;;   else insert the new entry into old
+  ([doc old new]
+    (let [mappings (mappings-for doc old new)
+          rebased (set/rename-keys old mappings)
+          rebased (dissoc rebased nil)]
+      (reduce
+        (fn [composed [new-path new-edit :as new-entry]]
+          (if (contains? composed new-path)
+            (assoc composed new-path
+                   (impl/compose (get-in doc new-path) (get composed new-path) new-edit))
+            (conj composed new-entry)))
+        rebased
+        new)))
+  ([doc old new & more]
+    (reduce (partial compose doc) (compose doc old new) more)))
 
 (defn transform
   [doc ours theirs]
-  (let [ours' (rebase-path-keys doc ours theirs)
-        theirs' (rebase-path-keys doc theirs ours)
-        shared-paths (shared-keys ours' theirs')]
-    (reduce
-      (fn [[ours theirs] path]
-        (let [state (get-in doc path)
-              our-edit (get ours path)
-              their-edit (get theirs path)
-              [our-edit' their-edit'] (impl/transform state our-edit their-edit)]
-          [(assoc ours path our-edit') (assoc theirs path their-edit')]))
-      [ours' theirs']
-      shared-paths)))
+  ;; for each level until the max level, where level is length of each path
+  ;;   find all paths in ours and theirs at that level
+  ;;   divide these paths into exclusively ours, exclusively theirs, and shared
+  ;;   rebase ours and theirs against each other,
+  ;;   transform shared,
+  ;; return modified ours and theirs
+  (let [max-level (apply max (map count (concat (keys ours) (keys theirs))))]
+    (loop [level 0
+           ours' ours
+           theirs' theirs]
+      (if (> level max-level)
+        [ours' theirs']
+        (let [l (set (filter #(= (count %) level) (keys ours)))
+              r (set (filter #(= (count %) level) (keys theirs)))
+              shared (set/union l r)
+              l' (set/difference l r)
+              r' (set/difference r l)
+
+              ;; something else should happen here
+              [ours' theirs']
+              (reduce
+                (fn [[ours theirs] path]
+                  (let [state (get-in doc path)
+                        our-edit (get ours path)
+                        their-edit (get theirs path)
+                        [our-edit' their-edit'] (impl/transform state our-edit their-edit)]
+                    [(assoc ours path our-edit') (assoc theirs path their-edit')]))
+                [ours' theirs']
+                shared)]
+          (recur (inc level) ours' theirs'))))))
