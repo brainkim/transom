@@ -1,6 +1,6 @@
 (ns transom.core
   (:require [clojure.set :as set]
-            [transom.protocols :as impl :refer [Diffable]]
+            [transom.protocols :as impl]
             [transom.string :as string]
             [transom.sequential :as vector])
   #+clj
@@ -85,29 +85,25 @@
         [old-path rebased-path]))))
 
 (defn compose
-  ;; for each entry of new,
-  ;; rebase the paths of any entries in old which are prefixed by the new entry
-  ;; then (and?)
-  ;; for each entry of new
-  ;; if the entry in new conflicts with an entry in old, 
-  ;;   compose the edits in old,
-  ;;   else insert the new entry into old
   ([doc old new]
     (let [mappings (mappings-for doc old new)
           rebased (set/rename-keys old mappings)
           rebased (dissoc rebased nil)]
       (reduce
-        (fn [composed [new-path new-edit :as new-entry]]
+        (fn [composed [new-path new-edit]]
           (if (contains? composed new-path)
             (assoc composed new-path
-                   (impl/compose (get-in doc new-path) (get composed new-path) new-edit))
-            (conj composed new-entry)))
+                   (impl/compose (get-in doc new-path)
+                                 (get composed new-path)
+                                 new-edit))
+            (assoc composed new-path new-edit)))
         rebased
         new)))
+
   ([doc old new & more]
     (reduce (partial compose doc) (compose doc old new) more)))
 
-(defn transform
+#_(defn transform
   [doc ours theirs]
   ;; for each level until the max level, where level is length of each path
   ;;   find all paths in ours and theirs at that level
