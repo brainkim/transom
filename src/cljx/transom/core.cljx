@@ -92,9 +92,7 @@
 
 (defn compose
   ([doc old new]
-    (let [mappings (mappings-for doc old new)
-          rebased (set/rename-keys old mappings)
-          rebased (dissoc rebased nil)]
+    (let [rebased (rebase-keys doc old new)]
       (reduce
         (fn [composed [new-path new-edit]]
           (if (contains? composed new-path)
