@@ -35,7 +35,7 @@
     (is (= (merge edit-4 edit-1-and-2)
            (transom/compose doc edit-4 edit-1 edit-2)))))
 
-#_(deftest transform-test
+(deftest transform-test
   (let [doc {:strings ["s" "sa" "sad"]}
         edit-1 {[:strings 0] [[:insert "a"] [:retain 1]]}
         edit-2 {[:strings 0] [[:delete 1]]}

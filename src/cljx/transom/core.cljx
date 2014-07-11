@@ -53,7 +53,7 @@
     (string/transform our-edit their-edit))
   
   PersistentVector
-  (rebase [this our-edit their-edit]
+  (transform [this our-edit their-edit]
     (vector/transform our-edit their-edit)))
 
 (defn patch
@@ -84,6 +84,12 @@
             rebased-path (when rebased-key (assoc old-path key-index rebased-key))]
         [old-path rebased-path]))))
 
+(defn rebase-keys
+  [doc old new]
+  (let [mappings (mappings-for doc old new)
+        rebased (set/rename-keys old mappings)]
+    (dissoc rebased nil)))
+
 (defn compose
   ([doc old new]
     (let [mappings (mappings-for doc old new)
@@ -92,46 +98,39 @@
       (reduce
         (fn [composed [new-path new-edit]]
           (if (contains? composed new-path)
-            (assoc composed new-path
-                   (impl/compose (get-in doc new-path)
-                                 (get composed new-path)
-                                 new-edit))
+            (assoc composed new-path (impl/compose (get-in doc new-path)
+                                                   (get composed new-path)
+                                                   new-edit))
             (assoc composed new-path new-edit)))
         rebased
         new)))
-
   ([doc old new & more]
     (reduce (partial compose doc) (compose doc old new) more)))
 
-#_(defn transform
+(defn transform
   [doc ours theirs]
-  ;; for each level until the max level, where level is length of each path
-  ;;   find all paths in ours and theirs at that level
-  ;;   divide these paths into exclusively ours, exclusively theirs, and shared
-  ;;   rebase ours and theirs against each other,
-  ;;   transform shared,
-  ;; return modified ours and theirs
   (let [max-level (apply max (map count (concat (keys ours) (keys theirs))))]
     (loop [level 0
-           ours' ours
-           theirs' theirs]
+           ours ours
+           theirs theirs]
       (if (> level max-level)
-        [ours' theirs']
-        (let [l (set (filter #(= (count %) level) (keys ours)))
-              r (set (filter #(= (count %) level) (keys theirs)))
-              shared (set/union l r)
-              l' (set/difference l r)
-              r' (set/difference r l)
-
-              ;; something else should happen here
+        [ours theirs]
+        (let [ffn #(= (count %) level)
+              l (filter ffn (keys ours))
+              r (filter ffn (keys theirs))
+              shared (set/intersection (set l) (set r))
               [ours' theirs']
               (reduce
                 (fn [[ours theirs] path]
                   (let [state (get-in doc path)
                         our-edit (get ours path)
                         their-edit (get theirs path)
-                        [our-edit' their-edit'] (impl/transform state our-edit their-edit)]
+
+                        [our-edit' their-edit']
+                        (impl/transform state our-edit their-edit)]
                     [(assoc ours path our-edit') (assoc theirs path their-edit')]))
-                [ours' theirs']
-                shared)]
-          (recur (inc level) ours' theirs'))))))
+                [ours theirs]
+                shared)
+              ours'' (rebase-keys doc ours' (select-keys theirs' r))
+              theirs'' (rebase-keys doc theirs' (select-keys ours' l))]
+          (recur (inc level) ours'' theirs''))))))
