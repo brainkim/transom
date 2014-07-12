@@ -33,7 +33,19 @@
     (is (= edit-4
            (transom/compose doc edit-1 edit-2 edit-4)))
     (is (= (merge edit-4 edit-1-and-2)
-           (transom/compose doc edit-4 edit-1 edit-2)))))
+           (transom/compose doc edit-4 edit-1 edit-2)))
+    (is (= {[:strings] [[:retain 3] [:insert [""]]]
+            [:strings 3] [[:insert "orange is the new black"]]}
+           (transom/compose doc
+                            {[:strings] [[:retain 3] [:insert [""]]]
+                             [:strings 3] [[:insert "orange"]]}
+                            {[:strings 3] [[:retain 6] [:insert " is the new black"]]})))
+    (is (= {[:strings] [[:retain 3] [:insert [""]]]
+            [:strings 3] [[:insert "orange is the new black"]]}
+           (transom/compose doc
+                            {[:strings] [[:retain 3] [:insert [""]]]}
+                            {[:strings 3] [[:insert "orange"]]}
+                            {[:strings 3] [[:retain 6] [:insert " is the new black"]]})))))
 
 (deftest transform-test
   (let [doc {:strings ["s" "sa" "sad"]}
