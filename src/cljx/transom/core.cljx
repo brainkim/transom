@@ -67,12 +67,12 @@
 
 (def diff impl/diff)
 
-(defn prefixes?
+(defn ^:private prefixes?
   [path-1 path-2]
   (and (< (count path-1) (count path-2))
        (= path-1 (subvec path-2 0 (count path-1)))))
 
-(defn mappings-for
+(defn ^:private rebase-mappings
   [doc old new]
   (into {}
     (for [[new-path new-edit] new
@@ -84,23 +84,23 @@
             rebased-path (when rebased-key (assoc old-path key-index rebased-key))]
         [old-path rebased-path]))))
 
-(defn rebase-keys
+(defn rebase-paths
   [doc old new]
-  (let [mappings (mappings-for doc old new)
+  (let [mappings (rebase-mappings doc old new)
         rebased (set/rename-keys old mappings)]
     (dissoc rebased nil)))
 
 (defn compose
   ([doc old new]
-    (let [rebased (rebase-keys doc old new)]
+    (let [old' (rebase-paths doc old new)]
       (reduce
-        (fn [composed [new-path new-edit]]
-          (if (contains? composed new-path)
-            (assoc composed new-path (impl/compose (get-in doc new-path)
-                                                   (get composed new-path)
-                                                   new-edit))
-            (assoc composed new-path new-edit)))
-        rebased
+        (fn [old [new-path new-edit]]
+          (if-some [old-edit (get old new-path)]
+            (let [state (get-in doc new-path)
+                  composed-edit (impl/compose state old-edit new-edit)]
+              (assoc old new-path composed-edit))
+            (assoc old new-path new-edit)))
+        old'
         new)))
   ([doc old new & more]
     (reduce (partial compose doc) (compose doc old new) more)))
@@ -129,6 +129,6 @@
                     [(assoc ours path our-edit') (assoc theirs path their-edit')]))
                 [ours theirs]
                 shared)
-              ours'' (rebase-keys doc ours' (select-keys theirs' r))
-              theirs'' (rebase-keys doc theirs' (select-keys ours' l))]
+              ours'' (rebase-paths doc ours' (select-keys theirs' r))
+              theirs'' (rebase-paths doc theirs' (select-keys ours' l))]
           (recur (inc level) ours'' theirs''))))))
