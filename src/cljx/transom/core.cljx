@@ -92,7 +92,8 @@
 
 (defn compose
   ([doc old new]
-    (let [old' (rebase-paths doc old new)]
+    (let [doc (patch doc old)
+          old (rebase-paths doc old new)]
       (reduce
         (fn [old [new-path new-edit]]
           (if-some [old-edit (get old new-path)]
@@ -100,7 +101,7 @@
                   composed-edit (impl/compose state old-edit new-edit)]
               (assoc old new-path composed-edit))
             (assoc old new-path new-edit)))
-        old'
+        old
         new)))
   ([doc old new & more]
     (reduce (partial compose doc) (compose doc old new) more)))
