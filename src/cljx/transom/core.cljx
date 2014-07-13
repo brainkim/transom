@@ -6,16 +6,6 @@
   #+clj
   (:import (clojure.lang PersistentVector)))
 
-(extend-protocol impl/Patchable
-  #+clj java.lang.String
-  #+cljs string
-  (patch [this edit]
-    (string/patch this edit))
-
-  PersistentVector
-  (patch [this edit]
-    (vector/patch this edit)))
-
 (extend-protocol impl/Diffable
   #+clj java.lang.String
   #+cljs string
@@ -26,14 +16,24 @@
   (diff [this edit]
     (vector/diff this edit)))
 
-(extend-protocol impl/WithRebasableKey
+(extend-protocol impl/Patchable
   #+clj java.lang.String
   #+cljs string
-  (rebase-key [this key edit destructive?]
+  (patch [this edit]
+    (string/patch this edit))
+
+  PersistentVector
+  (patch [this edit]
+    (vector/patch this edit)))
+
+(extend-protocol impl/WithRebasableRef
+  #+clj java.lang.String
+  #+cljs string
+  (rebase-ref [this key edit destructive?]
     (string/transform-caret key edit))
 
   PersistentVector
-  (rebase-key [this key edit destructive?]
+  (rebase-ref [this key edit destructive?]
     (vector/transform-key key edit destructive?)))
 
 (extend-protocol impl/WithComposableEdit
@@ -49,12 +49,14 @@
 (extend-protocol impl/WithTransformableEdit
   #+clj java.lang.String
   #+cljs string
-  (transform [this our-edit their-edit]
-    (string/transform our-edit their-edit))
+  (transform [this my-edit your-edit]
+    (string/transform my-edit your-edit))
   
   PersistentVector
-  (transform [this our-edit their-edit]
-    (vector/transform our-edit their-edit)))
+  (transform [this my-edit your-edit]
+    (vector/transform my-edit your-edit)))
+
+(def diff impl/diff)
 
 (defn patch
   ([doc edit-map]
@@ -65,8 +67,6 @@
   ([doc edit-map & edit-maps]
     (reduce patch (patch doc edit-map) edit-maps)))
 
-(def diff impl/diff)
-
 (defn ^:private prefixes?
   [path-1 path-2]
   (and (< (count path-1) (count path-2))
@@ -76,13 +76,14 @@
   [doc old new]
   (into {}
     (for [[new-path new-edit] new
-          old-path (filter #(prefixes? new-path %) (keys old))]
+          old-path (keys old)
+          :when (prefixes? new-path old-path)]
       (let [state (get-in doc new-path)
             key-index (count new-path)
             key (nth old-path key-index)
-            rebased-key (impl/rebase-key state key new-edit true)
-            rebased-path (when rebased-key (assoc old-path key-index rebased-key))]
-        [old-path rebased-path]))))
+            reb-key (impl/rebase-ref state key new-edit true)
+            reb-path (when reb-key (assoc old-path key-index reb-key))]
+        [old-path reb-path]))))
 
 (defn rebase-paths
   [doc old new]
@@ -106,30 +107,29 @@
   ([doc old new & more]
     (reduce (partial compose doc) (compose doc old new) more)))
 
-(defn transform
-  [doc ours theirs]
-  (let [max-level (apply max (map count (concat (keys ours) (keys theirs))))]
-    (loop [level 0
-           ours ours
-           theirs theirs]
-      (if (> level max-level)
-        [ours theirs]
-        (let [ffn #(= (count %) level)
-              l (filter ffn (keys ours))
-              r (filter ffn (keys theirs))
-              shared (set/intersection (set l) (set r))
-              [ours' theirs']
-              (reduce
-                (fn [[ours theirs] path]
-                  (let [state (get-in doc path)
-                        our-edit (get ours path)
-                        their-edit (get theirs path)
+(defn ^:private transform-shared
+  [doc mine yours shared-paths]
+  (reduce
+    (fn [[mine yours] path]
+      (let [state (get-in doc path)
+            my-edit (get mine path)
+            your-edit (get yours path)
+            [my-edit your-edit] (impl/transform state my-edit your-edit)]
+        [(assoc mine path my-edit) (assoc yours path your-edit)]))
+    [mine yours]
+    shared-paths))
 
-                        [our-edit' their-edit']
-                        (impl/transform state our-edit their-edit)]
-                    [(assoc ours path our-edit') (assoc theirs path their-edit')]))
-                [ours theirs]
-                shared)
-              ours'' (rebase-paths doc ours' (select-keys theirs' r))
-              theirs'' (rebase-paths doc theirs' (select-keys ours' l))]
-          (recur (inc level) ours'' theirs''))))))
+(defn transform
+  [doc mine yours]
+  (let [max-level (apply max (map count (concat (keys mine) (keys yours))))]
+    (loop [level 0, mine mine, yours yours]
+      (if (> level max-level)
+        [mine yours]
+        (let [ffn #(= (count %) level)
+              my-paths (filter ffn (keys mine))
+              your-paths (filter ffn (keys yours))
+              shared-paths (set/intersection (set my-paths) (set your-paths))
+              [mine yours] (transform-shared doc mine yours shared-paths)
+              mine' (rebase-paths doc mine (select-keys yours your-paths))
+              yours' (rebase-paths doc yours (select-keys mine my-paths))]
+          (recur (inc level) mine' yours'))))))
