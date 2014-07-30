@@ -76,33 +76,32 @@
   [doc old new]
   (into {}
     (for [[new-path new-edit] new
-          old-path (keys old)
-          :when (prefixes? new-path old-path)]
+          old-path (keys old) :when (prefixes? new-path old-path)]
       (let [state (get-in doc new-path)
-            key-index (count new-path)
-            key (nth old-path key-index)
-            reb-key (impl/rebase-ref state key new-edit true)
-            reb-path (when reb-key (assoc old-path key-index reb-key))]
+            ki (count new-path)
+            k (nth old-path ki)
+            reb-k (impl/rebase-ref state k new-edit true)
+            reb-path (when reb-k (assoc old-path ki reb-k))]
         [old-path reb-path]))))
 
 (defn rebase-paths
   [doc old new]
   (let [mappings (rebase-mappings doc old new)
-        rebased (set/rename-keys old mappings)]
-    (dissoc rebased nil)))
+        reb (set/rename-keys old mappings)]
+    (dissoc reb nil)))
 
 (defn compose
   ([doc old new]
     (let [doc (patch doc old)
-          old (rebase-paths doc old new)]
+          reb (rebase-paths doc old new)]
       (reduce
-        (fn [old [new-path new-edit]]
-          (if-some [old-edit (get old new-path)]
+        (fn [reb [new-path new-edit]]
+          (if-some [reb-edit (get reb new-path)]
             (let [state (get-in doc new-path)
-                  composed-edit (impl/compose state old-edit new-edit)]
-              (assoc old new-path composed-edit))
-            (assoc old new-path new-edit)))
-        old
+                  cmp-edit (impl/compose state reb-edit new-edit)]
+              (assoc reb new-path cmp-edit))
+            (assoc reb new-path new-edit)))
+        reb
         new)))
   ([doc old new & more]
     (reduce (partial compose doc) (compose doc old new) more)))
