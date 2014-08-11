@@ -7,6 +7,8 @@
             [clojure.test.check.properties :as prop]))
 
 (deftest diff-test
+  (is (= {} (thm/diff {:a 1 :b 2 :c 3}
+                  {:a 1 :b 2 :c 3})))
   (is (= {:inserts {:baz 4}
           :updates {:foo [1 3]}
           :deletes {:bar 2}}
@@ -38,18 +40,35 @@
          (thm/compose {:inserts {:baz 1} :updates {:foo [2 3]}}
                       {:updates {:baz [1 4]} :deletes {:bar 5}}))))
 
-#_(deftest transform-test
-  (is (= [{:inserts {:foo 1}} {:inserts {:bar 2}}]
-         (thm/transform {:inserts {:foo 1}} {:inserts {:bar 2}})))
-  (is (= [{:updates {:foo [1 2]}} {}]
-         (thm/transform {:updates {:foo [1 2]}} {:deletes {:foo 1}})))
+;; insert the same key -> left side wins unless same value then noop
+;; insert different keys -> no change
+;; (should updates always win over deletes?)
+;; update vs delete the same key -> left side (update) wins
+;; delete vs update the same key -> left side (delete) wins
+;; delete the same key -> noop
+
+(deftest transform-test
+  (comment
   (is (= [{} {}]
-         (thm/transform {:deletes {:foo 1}} {:deletes {:foo 1}})))
-  (is (= [{:deletes {:foo 1}} {:inserts {}}]
-         (thm/transform {:deletes {:foo 1}} {:inserts {:foo 1}})))
-  (is (= [{:inserts {:foo 1}} {}]
-         (thm/transform {:inserts {:foo 1}} {:deletes {:foo 1}})))
-  (is (= [{:inserts {:foo 1}} {}]
-         (thm/transform {:inserts {:foo 1}} {:inserts {:foo 2}})))
-  (is (= [{:updates {:foo [3 2]}} {}]
-         (thm/transform {:updates {:foo [1 2]}} {:updates {:foo [1 3]}}))))
+         (thm/transform {} {})))
+  (is (= [{} {}]
+         (thm/transform {:inserts {:a 1}} {:inserts {:a 1}})))
+  (is (= [{:updates {:a [2 1]}} {}]
+         (thm/transform {:inserts {:a 1}} {:inserts {:a 2}})))
+  (is (= [{:inserts {:a 1}} {:inserts {:b 2}}]
+         (thm/transform {:inserts {:a 1}} {:inserts {:b 2}})))
+  (is (= [{} {}]
+         (thm/transform {:updates {:a [1 2]}} {:updates {:a [1 2]}}))) 
+  (is (= [{:updates {:a [3 2]}} {}]
+         (thm/transform {:updates {:a [1 2]}} {:updates {:a [1 3]}})))
+  (is (= [{:inserts {:a 2}} {}]
+         (thm/transform {:updates {:a [1 2]}} {:deletes {:a 1}})))
+  (is (= [{} {:inserts {:a 2}}]
+         (thm/transform {:deletes {:a 1}} {:updates {:a [1 2]}})))
+  (is (= [{} {}]
+         (thm/transform {:deletes {:a 1}} {:deletes {:a 1}})))
+  (is (= []
+         (thm/transform {:inserts {:a 1}
+                         :deletes {:b 1}}
+                        {:inserts {:a 2}
+                         :updates {:b [1 2]}})))))
