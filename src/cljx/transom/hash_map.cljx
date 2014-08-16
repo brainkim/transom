@@ -1,79 +1,73 @@
 (ns transom.hash-map
-  (:require [clojure.set :as set]))
+  (:require [clojure.set :as set]
+      #+clj [clojure.core.match :refer [match]]
+     #+cljs [cljs.core.match] 
+  #+cljs
+  (:require-macros [cljs.core.match.macros :refer [match]])))
 
 (def ^:private key-set (comp set keys))
-
-(def ^:private remove-keys (partial apply dissoc))
-
-(defn ^:private filter-updates
-  [edit]
-  (if-let [updates (:updates edit)]
-    (assoc edit :updates
-           (select-keys updates (for [[k [v1 v2]] updates :when (not= v1 v2)] k)))
-    edit))
-
-(defn pack
-  [edit]
-  (let [edit (filter-updates edit)]
-    (into {} (for [[k v] edit] (if (empty? v) nil [k v])))))
-
-(defn ^:private venn
-  [set-1 set-2]
-  [(set/difference set-1 set-2)
-   (set/intersection set-1 set-2)
-   (set/difference set-2 set-1)])
-
 (defn diff
   [this that]
-  (let [[d-keys u-keys i-keys] (venn (key-set this) (key-set that))]
-    (pack {:deletes (select-keys this d-keys)
-           :updates (merge-with vector
-                                (select-keys this u-keys)
-                                (select-keys that u-keys))
-           :inserts (select-keys that i-keys)})))
+  (let [all-keys (set/union (key-set this) (key-set that))]
+    (into {}
+      (for [k all-keys]
+        (let [old-v (get this k), new-v (get that k)]
+          (cond
+            (and (contains? this k) (not (contains? that k))) [k [:delete old-v]]
+            (and (not (contains? this k)) (contains? that k)) [k [:insert new-v]]
+            (not= old-v new-v) [k [:update old-v new-v]]))))))
 
 (defn patch
-  [this {:keys [inserts updates deletes]}]
-  (doseq [k (keys inserts)]  (assert (not (contains? this k))))
-  (doseq [[k [v _]] updates] (assert (= (get this k) v)))
-  (doseq [[k v] deletes]     (assert (= (get this k) v)))
-  (let [this (merge this inserts)
-        this (merge-with #(second %2) this updates)]
-    (remove-keys this (keys deletes))))
-
-(defn ^:private update-insert-map
-  [updates]
-  (into {} (for [[k [_ v2]] updates] [k v2])))
+  [this edit]
+  (reduce
+    (fn [this [k [a b c]]]
+      (case a
+        :delete (dissoc this k)
+        :update (assoc this k c)
+        :insert (assoc this k b)))
+    this
+    edit))
 
 (defn compose
   [old new]
-  (let [{old-d :deletes
-         old-u :updates
-         old-i :inserts} old
-        {new-d :deletes
-         new-u :updates
-         new-i :inserts} new
-        old-d' (remove-keys old-d (concat (keys new-i) (keys new-u))) 
-        old-u' (remove-keys old-u (keys new-d))
-        new-u' (remove-keys new-u (keys old-i)) 
-        new-ui (select-keys (update-insert-map new-u) (keys old-i)) 
-        old-i' (remove-keys old-i (keys new-d))]
-    (pack {:deletes (merge old-d' new-d)    
-           :updates (merge-with #(vector (first %1) (second %2)) old-u' new-u')
-           :inserts (merge old-i' new-i new-ui)})))
+  (let [cmp (merge-with
+              (fn [[a b c] [d e f]]
+                (match [a d]
+                  ;[:insert :insert]
+                  [:insert :update] [:insert f]
+                  [:insert :delete] nil
+                  ;[:update :insert]
+                  [:update :update] [:update b f]
+                  [:update :delete] [:delete b]
+                  [:delete :insert] [:update b e]
+                  ;[:delete :update]
+                  ;[:delete :delete]
+                  ))
+              old
+              new)]
+    (into {} (remove (comp nil? val) cmp))))
 
 (defn transform
   [mine yours]
-  (let [{my-d :deletes
-         my-u :updates
-         my-i :inserts} mine
-        {your-d :deletes
-         your-u :updates
-         your-i :inserts} yours
-        our-i-keys (set/intersection (key-set my-i) (key-set your-i))
-        my-i ()
-        your-i (if (seq our-i-keys)
-                 (remove-keys your-i our-i-keys)
-                 your-i)]
-
-    ))
+  (let [shared-keys (set/intersection (key-set mine) (key-set yours))]
+    (reduce
+      (fn [[mine yours] k]
+        (let [[a b c] (get mine k), [d e f] (get yours k)]
+          (match [a d]
+            [:insert :insert]
+            (if (= b e)
+              [(dissoc mine k) (dissoc yours k)]
+              [(assoc mine k [:update e b]) (dissoc yours k)])
+            ;[:insert :update]
+            ;[:insert :delete]
+            ;[:update :insert]
+            [:update :update]
+            (if (= c f)
+              [(dissoc mine k) (dissoc yours k)]
+              [(assoc mine k [:update f c]) (dissoc yours k)])
+            [:update :delete] [(assoc mine k [:insert c]) (dissoc yours k)]
+            ;[:delete :insert]
+            [:delete :update] [(dissoc yours k) (assoc mine k [:insert f])]
+            [:delete :delete] [(dissoc mine k) (dissoc yours k)])))
+      [mine yours]
+      shared-keys)))
