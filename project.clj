@@ -19,7 +19,7 @@
                              [com.stuartsierra/component "0.2.1"]
                              [org.clojure/test.check "0.5.7"]
                              [com.cemerick/clojurescript.test "0.3.0"]
-                             [com.cemerick/double-check "0.5.7-SNAPSHOT"]
+                             [com.cemerick/double-check "0.5.7"]
                              [bidi "1.10.2"]]
               :plugins [[lein-cljsbuild "1.0.3"]
                         [com.keminglabs/cljx "0.3.2"]

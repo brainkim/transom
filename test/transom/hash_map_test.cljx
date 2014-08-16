@@ -62,3 +62,34 @@
          (thm/transform {:a [:delete 1]} {:a [:update 1 2]})))
   (is (= [{} {}]
          (thm/transform {:a [:delete 1]} {:a [:delete 1]}))))
+
+(def simple-map-gen (gen/map gen/keyword gen/int))
+
+(defspec patching-diffs
+  1000
+  (prop/for-all [m1 simple-map-gen
+                 m2 simple-map-gen]
+    (and (= m2 (thm/patch m1 (thm/diff m1 m2)))
+         (= m1 (thm/patch m2 (thm/diff m2 m1))))))
+
+(defspec composing-edits
+  1000
+  (prop/for-all [m1 simple-map-gen
+                 m2 simple-map-gen
+                 m3 simple-map-gen]
+    (let [edit1 (thm/diff m1 m2)
+          edit2 (thm/diff m2 m3)]
+      (= m3
+         (thm/patch (thm/patch m1 edit1) edit2)
+         (thm/patch m1 (thm/compose edit1 edit2))))))
+
+(defspec transforming-edits
+  1000
+  (prop/for-all [m1 simple-map-gen
+                 m2 simple-map-gen
+                 m3 simple-map-gen]
+    (let [edit1 (thm/diff m1 m2)
+          edit2 (thm/diff m1 m3)
+          [edit1' edit2'] (thm/transform edit1 edit2)]
+      (= (thm/patch (thm/patch m1 edit1) edit2')
+         (thm/patch (thm/patch m1 edit2) edit1')))))

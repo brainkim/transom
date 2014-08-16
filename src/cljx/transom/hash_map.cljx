@@ -67,7 +67,7 @@
               [(assoc mine k [:update f c]) (dissoc yours k)])
             [:update :delete] [(assoc mine k [:insert c]) (dissoc yours k)]
             ;[:delete :insert]
-            [:delete :update] [(dissoc yours k) (assoc mine k [:insert f])]
+            [:delete :update] [(dissoc mine k) (assoc yours k [:insert f])]
             [:delete :delete] [(dissoc mine k) (dissoc yours k)])))
       [mine yours]
       shared-keys)))
