@@ -2,66 +2,100 @@
   (:require [clojure.set :as set]
             [transom.protocols :as impl]
             [transom.string :as string]
-            [transom.sequential :as vector])
+            [transom.sequential :as vector]
+            [transom.hash-map :as map])
   #+clj
-  (:import (clojure.lang PersistentVector)))
+  (:import (java.lang String)
+           (clojure.lang IPersistentVector)
+           (clojure.lang IPersistentMap)))
 
-(extend-protocol impl/Diffable
-  #+clj java.lang.String
-  #+cljs string
+(defn ^:private emit-expanded-specs
+  [specs]
+  (apply concat
+    (for [[ts spec] (partition 2 specs)
+          t ts]
+      (list t spec))))
+
+(defmacro ^:private extend-protocols
+  [p & specs]
+  `(extend-protocol ~p ~@(emit-expanded-specs specs)))
+
+(extend-protocols impl/Diffable
+  [#+clj String #+cljs string]
   (diff [this that]
     (string/diff this that))
 
-  PersistentVector
-  (diff [this edit]
-    (vector/diff this edit)))
+  [#+clj IPersistentVector #+cljs PersistentVector]
+  (diff [this that]
+    (vector/diff this that))
 
-(extend-protocol impl/Patchable
-  #+clj java.lang.String
-  #+cljs string
+  [#+clj IPersistentMap]
+  (diff [this that]
+    (map/diff this that)))
+
+(extend-protocols impl/Patchable
+  [#+clj String #+cljs string]
   (patch [this edit]
     (string/patch this edit))
 
-  PersistentVector
+  [#+clj IPersistentVector #+cljs PersistentVector]
   (patch [this edit]
-    (vector/patch this edit)))
+    (vector/patch this edit))
 
-(extend-protocol impl/WithRebasableRef
-  #+clj java.lang.String
-  #+cljs string
+  [#+clj IPersistentMap]
+  (patch [this edit]
+    (map/patch this edit)))
+
+(extend-protocols impl/WithRebasableRef
+  [#+clj String #+cljs string]
   (rebase-ref [this key edit destructive?]
     (string/transform-caret key edit))
 
-  PersistentVector
+  [#+clj IPersistentVector #+cljs PersistentVector]
   (rebase-ref [this key edit destructive?]
-    (vector/transform-key key edit destructive?)))
+    (vector/transform-key key edit destructive?))
 
-(extend-protocol impl/WithComposableEdit
-  #+clj java.lang.String
-  #+cljs string
+  [#+clj IPersistentMap]
+  (rebase-ref [this key edit destructive?]
+    (if destructive?
+      nil
+      key)))
+
+(extend-protocols impl/WithComposableEdit
+  [#+clj String #+cljs string]
   (compose [this old-edit new-edit]
     (string/compose old-edit new-edit))
 
-  PersistentVector
+  [#+clj IPersistentVector #+cljs PersistentVector]
   (compose [this old-edit new-edit]
-    (vector/compose old-edit new-edit)))
+    (vector/compose old-edit new-edit))
 
-(extend-protocol impl/WithTransformableEdit
-  #+clj java.lang.String
-  #+cljs string
+  [#+clj IPersistentMap]
+  (compose [this old-edit new-edit]
+    (map/compose old-edit new-edit)))
+
+(extend-protocols impl/WithTransformableEdit
+  [#+clj String #+cljs string]
   (transform [this my-edit your-edit]
     (string/transform my-edit your-edit))
-  
-  PersistentVector
+
+  [#+clj IPersistentVector #+cljs PersistentVector]
   (transform [this my-edit your-edit]
-    (vector/transform my-edit your-edit)))
+    (vector/transform my-edit your-edit))
+
+  [#+clj IPersistentMap]
+  (transform [this my-edit your-edit]
+    (map/transform my-edit your-edit)))
 
 (def diff impl/diff)
 
 (defn patch
   ([doc edit-map]
     (reduce
-      (fn [state [path edit]] (update-in state path impl/patch edit))
+      (fn [state [path edit]]
+        (if (empty? path)
+          (impl/patch doc edit)
+          (update-in state path impl/patch edit)))
       doc
       (sort-by (comp count key) edit-map)))
   ([doc edit-map & edit-maps]
@@ -121,9 +155,8 @@
 (defn transform
   [doc mine yours]
   (let [max-level (apply max (map count (concat (keys mine) (keys yours))))]
-    (loop [level 0, mine mine, yours yours]
-      (if (> level max-level)
-        [mine yours]
+    (reduce
+      (fn [[mine yours] level]
         (let [ffn #(= (count %) level)
               my-paths (filter ffn (keys mine))
               your-paths (filter ffn (keys yours))
@@ -131,4 +164,6 @@
               [mine yours] (transform-shared doc mine yours shared-paths)
               mine' (rebase-paths doc mine (select-keys yours your-paths))
               yours' (rebase-paths doc yours (select-keys mine my-paths))]
-          (recur (inc level) mine' yours'))))))
+          [mine' yours']))
+      [mine yours]
+      (range (inc max-level)))))

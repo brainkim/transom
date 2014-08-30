@@ -6,6 +6,7 @@
   (:require-macros [cljs.core.match.macros :refer [match]])))
 
 (def ^:private key-set (comp set keys))
+
 (defn diff
   [this that]
   (let [all-keys (set/union (key-set this) (key-set that))]

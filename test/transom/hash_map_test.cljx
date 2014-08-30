@@ -93,3 +93,13 @@
           [edit1' edit2'] (thm/transform edit1 edit2)]
       (= (thm/patch (thm/patch m1 edit1) edit2')
          (thm/patch (thm/patch m1 edit2) edit1')))))
+
+(defspec composing-transforms
+  1000
+  (prop/for-all [m1 simple-map-gen
+                 m2 simple-map-gen
+                 m3 simple-map-gen]
+    (let [edit1 (thm/diff m1 m2)
+          edit2 (thm/diff m1 m3)
+          [edit1' edit2'] (thm/transform edit1 edit2)]
+      (= (thm/compose edit1 edit2') (thm/compose edit2 edit1')))))
