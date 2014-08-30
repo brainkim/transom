@@ -3,22 +3,14 @@
             [transom.protocols :as impl]
             [transom.string :as string]
             [transom.sequential :as vector]
-            [transom.hash-map :as map])
+            [transom.map :as map]
+      #+clj [transom.macros :refer [extend-protocols]])
+  #+cljs
+  (:require-macros [transom.macros :refer [extend-protocols]])
   #+clj
   (:import (java.lang String)
            (clojure.lang IPersistentVector)
            (clojure.lang IPersistentMap)))
-
-(defn ^:private emit-expanded-specs
-  [specs]
-  (apply concat
-    (for [[ts spec] (partition 2 specs)
-          t ts]
-      (list t spec))))
-
-(defmacro ^:private extend-protocols
-  [p & specs]
-  `(extend-protocol ~p ~@(emit-expanded-specs specs)))
 
 (extend-protocols impl/Diffable
   [#+clj String #+cljs string]
@@ -45,6 +37,11 @@
   [#+clj IPersistentMap]
   (patch [this edit]
     (map/patch this edit)))
+
+(extend-protocols impl/WithInvertibleEdit
+  [#+clj IPersistentMap]
+  (invert [this edit]
+    (map/invert edit)))
 
 (extend-protocols impl/WithRebasableRef
   [#+clj String #+cljs string]

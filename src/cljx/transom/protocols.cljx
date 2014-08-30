@@ -6,6 +6,9 @@
 (defprotocol Diffable
   (diff [this that]))
 
+(defprotocol WithInvertibleEdit
+  (invert [this edit]))
+
 (defprotocol WithRebasableRef
   (rebase-ref [this key edit destructive?]))
 
