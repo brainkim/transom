@@ -5,7 +5,6 @@
             [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
             [transom.core :as transom]
-            [transom.diff :as diff]
             [transom.document :as document]
             [goog.dom :as gdom]
             [goog.dom.selection :as selection]
@@ -155,7 +154,7 @@
       (om/build x-ray data)
       (om/build collab-textarea data))))
 
-(defn main
+((defn main
   []
   (set! *sock* (socket (str "ws://" (host) "/ws/textarea")))
   (let [!app-state (atom {:doc nil :selection {:start 0 :end 0}})
@@ -173,8 +172,7 @@
               :tx-listen
               (fn [{:keys [old-value new-value path]} cursor]
                 (when (= path [:doc])
-                  (let [diff (diff/diff old-value new-value)
+                  (let [diff (transom/diff old-value new-value)
                         ed (edit-distance diff)]
                     (stage diff !stage))))})
-    (om/root x-ray !stage {:target (gdom/getElement "xray")})))
-(main)
+    (om/root x-ray !stage {:target (gdom/getElement "xray")}))))
