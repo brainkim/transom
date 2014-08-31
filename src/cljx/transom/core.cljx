@@ -11,6 +11,8 @@
   (:import (java.lang String)
            (clojure.lang IPersistentVector)
            (clojure.lang IPersistentMap)))
+#+cljs
+(enable-console-print!)
 
 (extend-protocols impl/Diffable
   [#+clj String #+cljs string]
@@ -21,7 +23,7 @@
   (diff [this that]
     (vector/diff this that))
 
-  [#+clj IPersistentMap]
+  [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
   (diff [this that]
     (map/diff this that)))
 
@@ -34,7 +36,7 @@
   (patch [this edit]
     (vector/patch this edit))
 
-  [#+clj IPersistentMap]
+  [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
   (patch [this edit]
     (map/patch this edit)))
 
@@ -52,11 +54,9 @@
   (rebase-ref [this key edit destructive?]
     (vector/transform-key key edit destructive?))
 
-  [#+clj IPersistentMap]
+  [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
   (rebase-ref [this key edit destructive?]
-    (if destructive?
-      nil
-      key)))
+    (map/transform-key key edit)))
 
 (extend-protocols impl/WithComposableEdit
   [#+clj String #+cljs string]
@@ -67,7 +67,7 @@
   (compose [this old-edit new-edit]
     (vector/compose old-edit new-edit))
 
-  [#+clj IPersistentMap]
+  [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
   (compose [this old-edit new-edit]
     (map/compose old-edit new-edit)))
 
@@ -80,7 +80,7 @@
   (transform [this my-edit your-edit]
     (vector/transform my-edit your-edit))
 
-  [#+clj IPersistentMap]
+  [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
   (transform [this my-edit your-edit]
     (map/transform my-edit your-edit)))
 

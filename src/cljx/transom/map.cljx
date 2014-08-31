@@ -81,3 +81,7 @@
             [:delete :delete] [(dissoc mine k) (dissoc yours k)])))
       [mine yours]
       shared-keys)))
+
+(defn transform-key
+  [key edit]
+  (if (contains? edit key) nil key))
