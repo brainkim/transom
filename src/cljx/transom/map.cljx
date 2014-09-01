@@ -51,8 +51,7 @@
                     ;[:delete :update]
                     ;[:delete :delete]
                     ))
-                old
-                new)]
+                old new)]
       (into {} (remove (comp nil? val) cmp))))
   ([old new & more]
     (reduce compose (compose old new) more)))
