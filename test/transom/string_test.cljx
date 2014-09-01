@@ -28,9 +28,9 @@
 (deftest pack-test
   (are [x y] (= x y)
     [[:retain 5] [:insert "xsy"] [:retain 3]]
-    (pack [[:retain 2] :nop [:retain 3] [:insert "xs"] [:insert "y"] [:retain 1] [:retain 2]])
+    (pack [[:retain 2] nil [:retain 3] [:insert "xs"] [:insert "y"] [:retain 1] [:retain 2]])
     [[:retain 3] [:insert "xsy"] [:retain 2]]
-    (pack [[:retain 2] [:retain 1] [:retain 0] :nop [:insert "xs"] :nop [:insert "y"] [:retain 0] [:retain 2]])))
+    (pack [[:retain 2] [:retain 1] [:retain 0] nil [:insert "xs"] nil [:insert "y"] [:retain 0] [:retain 2]])))
 
 (defn transform-helper
   [in op1 op2]
