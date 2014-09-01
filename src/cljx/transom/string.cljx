@@ -81,7 +81,7 @@
 (defn diff
   [a b]
   (if (= a b)
-    [[:retain (count a)]] ;; don't forget to wrap it dummy
+    (pack [[:retain (count a)]]) ;; don't forget to wrap it dummy
     (let [pre (common-prefix a b)
           suf (common-suffix a b)]
       (if (< pre suf)
