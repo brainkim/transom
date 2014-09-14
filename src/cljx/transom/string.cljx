@@ -166,7 +166,7 @@
 
 (defn ^:private align-transform
   [edit1 edit2]
-  (loop [edit1 edit1, edit2 edit2, out []]
+  (loop [edit1 edit1, edit2 edit2, out [[] []]]
     (let [op1 (first edit1) op2 (first edit2)]
       (cond
         (nil? op1) (concat out (map #(vector nil %) edit2))
