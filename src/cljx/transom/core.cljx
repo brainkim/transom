@@ -11,8 +11,6 @@
   (:import (java.lang String)
            (clojure.lang IPersistentVector)
            (clojure.lang IPersistentMap)))
-#+cljs
-(enable-console-print!)
 
 (extend-protocols impl/Diffable
   [#+clj String #+cljs string]
