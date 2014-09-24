@@ -9,7 +9,7 @@
                  [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
                  [org.clojure/core.typed "0.2.48"]]
   :source-paths ["src/clj" "src/cljx"]
-  :test-paths ["target/test-classes"]
+  :test-paths ["test" "target/test-classes"]
   :profiles {:dev
              {:dependencies [[om "0.6.4"]
                              [ring/ring "1.2.1"]

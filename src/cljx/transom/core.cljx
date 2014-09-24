@@ -82,7 +82,10 @@
   (transform [this my-edit your-edit]
     (map/transform my-edit your-edit)))
 
-(def diff impl/diff)
+(defn diff
+  [old new]
+  (assert (= (type old) (type new)))
+  (impl/diff old new))
 
 (defn patch
   ([doc edit-map]
