@@ -30,16 +30,14 @@
 
 (defn count-before
   [edit]
-  (try 
-    (letfn
-      [(inc-count
-        [c [o p]]
-        (case o
-          :retain (+ c p)
-          :delete (+ c p)
-          :insert c))]
-      (reduce inc-count 0 edit))
-    (catch Exception e (do (println edit) (throw e)))))
+  (letfn
+    [(inc-count
+      [c [o p]]
+      (case o
+        :retain (+ c p)
+        :delete (+ c p)
+        :insert c))]
+    (reduce inc-count 0 edit)))
 
 (defn count-after
   [edit]
@@ -210,7 +208,6 @@
   [caret edit]
   ;; caret is the little blinky line thing
   ;; index is where we are in the (new?) document
-  #_(assert (<= caret (count-before edit)))
   (loop [caret caret, index 0, edit edit]
     (if (empty? edit)
       caret

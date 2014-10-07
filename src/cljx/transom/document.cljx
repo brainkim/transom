@@ -1,5 +1,6 @@
 (ns transom.document
-  (:require [transom.core :as transom])
+  (:require [transom.core :as transom]
+            [transom.utils :refer [dissocv]])
   #+clj
   (:import (clojure.lang IPersistentVector)))
 
@@ -41,22 +42,31 @@
   []
   (atom (Document. {} [])))
 
-(defn transact!
-  ([doc path f]
-    (swap! doc (fn [doc] (update doc path (f (get-in (:state doc) path)))))))
-
 (defn update!
-  ([doc path new-value]
-    (swap! doc update path new-value)))
+  [doc path new-value]
+  (swap! doc update path new-value))
 
-(comment
-  (def pizza (document))
-  (deref pizza)
-  (update! pizza [] {:foo "bar" :diff "please" :bar "baz"})
-  (update! pizza [:foo] "barbies")
-  (transact! pizza [:foo] (fn [foo] (str "what is the deal " foo " are the best")))
-  (transact! pizza [] (fn [old] (assoc old :vec ["a"])))
-  (transact! pizza [:vec] (fn [v] (vec (remove #(= % "a") v))))
-  (transact! pizza [:vec] (fn [v] (into v ["foo" "bar" ",,"])))
-  (apply transom/compose {} (:history @pizza))
-  )
+(defn transact!
+  [doc path f & args]
+  (swap! doc (fn [doc] (update doc path (apply f (get-in (:state doc) path) args)))))
+
+;; TODO(brian): Do I need to sort paths before deleting? Ugh my brain.
+(defn delete!
+  ([doc path]
+   (assert (vector? path) "Paths are always vectors!")
+   (swap! doc
+     (fn [doc]
+       (let [state (:state doc)
+             target-ref (peek path)
+             target-path (pop path)
+             target (get-in state target-path)
+             target' (cond (vector? target) (dissocv target target-ref)
+                           (map? target) (dissoc target target-ref))]
+         (update doc target-path target')))))
+  ([doc path & paths]
+    ;; TODO(brian): batch edits together so they don't muck up history?
+    (reduce delete! doc (delete! doc path) paths)))
+
+(defn patch!
+  [doc edit version]
+  (swap! doc patch edit version))
