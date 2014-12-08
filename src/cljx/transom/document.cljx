@@ -70,3 +70,17 @@
 (defn patch!
   [doc edit version]
   (swap! doc patch edit version))
+
+(comment
+  (def pizza (document))
+  (get @pizza :state)
+  (get @pizza :history)
+  (deref pizza)
+  (update! pizza [] {:foo "bar" :diff "please" :bar "baz"})
+  (update! pizza [:foo] "barbies")
+  (transact! pizza [:foo] (fn [foo] (str "what is the deal " foo " are the best")))
+  (transact! pizza [] (fn [old] (assoc old :vec ["a"])))
+  (transact! pizza [:vec] (fn [v] (vec (remove #(= % "a") v))))
+  (transact! pizza [:vec] (fn [v] (into v ["foo" "bar" ",,"])))
+  (apply transom/compose nil (:history @pizza))
+  )
