@@ -128,11 +128,12 @@
           reb (rebase-paths doc old new)]
       (reduce
         (fn [reb [new-path new-edit]]
-          (if-some [reb-edit (get reb new-path)]
-            (let [state (get-in doc new-path)
-                  cmp-edit (impl/compose state reb-edit new-edit)]
-              (assoc reb new-path cmp-edit))
-            (assoc reb new-path new-edit)))
+          (let [reb-edit (get reb new-path)]
+            (if (not (nil? reb-edit))
+              (let [state (get-in doc new-path)
+                    cmp-edit (impl/compose state reb-edit new-edit)]
+                (assoc reb new-path cmp-edit))
+              (assoc reb new-path new-edit))))
         reb
         new)))
   ([doc old new & more]
