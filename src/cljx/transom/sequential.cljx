@@ -5,7 +5,30 @@
   #+cljs
   (:require-macros [cljs.core.match.macros :refer [match]]))
 
-(defn ^:private count-before
+(def ^:private nop? (some-fn nil? #(= (second %) 0) #(= (second %) [])))
+
+(defn pack
+  [edit]
+  (let [edit (remove nop? edit)]
+    (reduce
+      (fn [edit op]
+        (let [[o1 p1] (peek edit)
+              [o2 p2] op]
+          (if (= o1 o2)
+            (conj (pop edit)
+                  (case o1
+                    :retain [:retain (+ p1 p2)]
+                    :delete [:delete (+ p1 p2)]
+                    :insert [:insert (into p1 p2)]))
+            (conj edit op))))
+      (vec (take 1 edit))
+      (rest edit))))
+
+(defn ^:private pack-pairs
+  [pairs]
+  (map pack (apply mapv vector pairs)))
+
+(defn count-before
   [edit]
   (letfn
     [(inc-count
@@ -16,7 +39,7 @@
         :insert c))]
     (reduce inc-count 0 edit)))
 
-(defn ^:private count-after
+(defn count-after
   [edit]
   (letfn
     [(inc-count
@@ -26,178 +49,6 @@
         :delete c
         :insert (+ c (count p))))]
     (reduce inc-count 0 edit)))
-
-(defn patch
-  ([doc edit]
-    (assert (= (count doc) (count-before edit))
-            (str "transom/patch: length mismatch" \newline
-                 "Doc: " doc \newline
-                 "Edit: " edit))
-    (loop [doc doc, edit edit, out nil]
-      (if (empty? edit)
-        (vec out)
-        (let [[o p] (first edit)
-              r (rest edit)]
-          (case o
-            :retain (recur (drop p doc) r (concat out (take p doc)))
-            :delete (recur (drop p doc) r out)
-            :insert (recur doc r (concat out p)))))))
-  ([doc edit & edits]
-    (reduce patch (patch doc edit) edits)))
-
-(defn pack
-  [edit]
-  (letfn
-    [(nop?
-      [op]
-      (or (keyword? op) (= (second op) 0) (= (second op) [])))
-     (combinable?
-       [[o1] [o2]]
-       (= o1 o2))
-     (combine
-       [op1 op2]
-       (match [op1 op2]
-         [[:retain p1] [:retain p2]] [:retain (+ p1 p2)]
-         [[:delete p1] [:delete p2]] [:delete (+ p1 p2)]
-         [[:insert p1] [:insert p2]] [:insert (vec (concat p1 p2))]))
-     (reducer
-       ;; pop as in previous op
-       ;; cop as in current op
-       [[pop edit' :as prev] cop]
-       (cond
-         (nop? cop) prev
-         (nil? pop) [cop edit']
-         (combinable? pop cop) [(combine pop cop) edit']
-         :else [cop (conj edit' pop)]))]
-    (let [[pop edit'] (reduce reducer [nil []] edit)]
-      (if (nil? pop)
-        edit'
-        (conj edit' pop)))))
-
-(defn pack-pairs
-  [pairs]
-  (map pack (apply mapv vector pairs)))
-
-(defn ^:private align-transform
-  [edit1 edit2]
-  (loop [edit1 edit1, edit2 edit2, out []]
-    (let [op1 (first edit1) op2 (first edit2)]
-      (cond
-        (nil? op1) (concat out (map #(vector :nop %) edit2))
-        (nil? op2) (concat out (map #(vector % :nop) edit1))
-        (= :insert (first op1)) (recur (rest edit1) edit2 (conj out [op1 :nop]))
-        (= :insert (first op2)) (recur edit1 (rest edit2) (conj out [:nop op2]))
-        :else
-        (let [[o1 p1] op1
-              [o2 p2] op2]
-          (case (compare p1 p2)
-            -1 (recur (rest edit1)
-                      (cons [o2 (- p2 p1)] (rest edit2))
-                      (conj out [op1 [o2 p1]]))
-            0  (recur (rest edit1) (rest edit2)
-                      (conj out [op1 op2]))
-            1  (recur (cons [o1 (- p1 p2)] (rest edit1))
-                      (rest edit2)
-                      (conj out [[o1 p2] op2]))))))))
-
-(defn transform
-  [edit1 edit2]
-  (assert (= (count-before edit1) (count-before edit2))
-          (str "transom/transform: length mismatch" \newline
-               "Edit 1: " edit1 \newline
-               "Edit 2: " edit2))
-  (letfn
-    [(compare-ops
-       [out [op1 op2]]
-       (match [op1 op2]
-         [[:insert p1] _           ] (conj out [op1 [:retain (count p1)]])
-         [_            [:insert p2]] (conj out [[:retain (count p2)] op2])
-         [[:retain _ ] [:retain _ ]] (conj out [op1 op2])
-         [[:retain p1] [:delete p2]] (conj out [:nop op2])
-         [[:delete p1] [:retain p2]] (conj out [op1 :nop])
-         :else (conj out [:nop :nop])))]
-    (->> (align-transform edit1 edit2)
-         (reduce compare-ops [])
-         pack-pairs)))
-
-(defn ^:private align-compose
-  [edit1 edit2]
-  (loop [edit1 edit1 edit2 edit2 out []]
-    (let [op1 (first edit1) op2 (first edit2)]
-      (cond
-        (nil? op1) (concat out (map #(vector :nop %) edit2))
-        (nil? op2) (concat out (map #(vector % :nop) edit1))
-        (= :delete (first op1)) (recur (rest edit1) edit2 (conj out [op1 :nop]))
-        (= :insert (first op2)) (recur edit1 (rest edit2) (conj out [:nop op2]))
-
-        :else
-        (let [[o1 p1] op1
-              p1' (if (sequential? p1) (count p1) p1)
-              [o2 p2] op2]
-          (case (compare p1' p2)
-            -1
-            (recur (rest edit1)
-                   (cons [o2 (- p2 p1')] (rest edit2))
-                   (conj out [op1 [o2 p1']]))
-            0
-            (recur (rest edit1)
-                   (rest edit2)
-                   (conj out [op1 op2]))
-            1
-            (let [[left taken] (if (sequential? p1)
-                                 [(drop p2 p1) (take p2 p1)]
-                                 [(- p1 p2) p2])]
-              (recur (cons [o1 left] (rest edit1))
-                     (rest edit2)
-                     (conj out [[o1 taken] op2])))))))))
-
-(defn compose
-  ([edit1 edit2]
-    (assert (= (count-after edit1) (count-before edit2))
-            (str "transom/compose: length mismatch" \newline
-                 "Edit 1: " edit1 \newline
-                 "Edit 2: " edit2))
-    (letfn
-      [(compare-ops
-         [out [op1 op2]]
-         (match [op1 op2]
-           [[:delete _] _          ] (conj out op1)
-           [_           [:insert _]] (conj out op2)
-           [[:insert _] [:retain _]] (conj out op1)
-           [[:insert _] [:delete _]] out
-           [[:retain _] [:retain _]] (conj out op1)
-           [[:retain _] [:delete _]] (conj out op2)
-           ;; We need these cases for weird edge cases
-           ;; e.g. (compose [[:delete 0]] [[:retain 0]])
-           [:nop        _          ] out
-           [_           :nop       ] out))]
-      (->> (align-compose edit1 edit2)
-           (reduce compare-ops [])
-           pack)))
-  ([edit1 edit2 & more]
-    (reduce compose (compose edit1 edit2) more)))
-
-(defn transform-key
-  [key edit destructive?]
-  (loop [key key, index 0, edit edit]
-    (if-let [[o p] (first edit)]
-      (case o
-        :retain
-        (recur key (+ index p) (rest edit))
-
-        :delete
-        (if (>= key index)
-          (cond
-            (>= (- key index) p) (recur (- key p) index (rest edit))
-            (not destructive?) 0)
-          (recur key index (rest edit)))
-
-        :insert
-        (let [p (count p)]
-          (if (>= key index)
-            (recur (+ key p) (+ index p) (rest edit))
-            (recur key (+ index p) (rest edit)))))
-      key)))
 
 (defn ^:private common-prefix
   [a b]
@@ -228,10 +79,8 @@
 (defn diff
   [a b]
   (if (= a b)
-    [[:retain (count a)]]
-    (let [a (vec a)
-          b (vec b)
-          pre (common-prefix a b)
+    (pack [[:retain (count a)]]) ;; don't forget to wrap it dummy
+    (let [pre (common-prefix a b)
           suf (common-suffix a b)]
       (if (< pre suf)
         (let [a' (subvec a 0 (- (count a) suf))
@@ -242,3 +91,137 @@
               b' (subvec b pre)
               suf (common-suffix a' b')]
           (create-edit a b pre suf))))))
+
+(defn patch
+  ([doc edit]
+    (assert (= (count doc) (count-before edit))
+            (str "transom/patch: length mismatch" \newline
+                 "Doc: " doc \newline
+                 "Edit: " edit))
+    (second (reduce
+              (fn [[doc out] [o p]]
+                (case o
+                  :retain [(subvec doc p) (into out (subvec doc 0 p))]
+                  :delete [(subvec doc p) out]
+                  :insert [doc (into out p)]))
+              [doc []]
+              edit)))
+  ([doc edit & edits]
+    (reduce patch (patch doc edit) edits)))
+
+(defn ^:private align-compose
+  [edit1 edit2]
+  (loop [edit1 edit1 edit2 edit2 out []]
+    (let [op1 (first edit1) op2 (first edit2)]
+      (cond
+        (nil? op1) (into out (map #(vector nil %) edit2))
+        (nil? op2) (into out (map #(vector % nil) edit1))
+        (= :delete (first op1)) (recur (rest edit1) edit2 (conj out [op1 nil]))
+        (= :insert (first op2)) (recur edit1 (rest edit2) (conj out [nil op2]))
+
+        :else
+        (let [[o1 p1] op1
+              p1' (if (vector? p1) (count p1) p1)
+              [o2 p2] op2]
+          (case (compare p1' p2)
+            -1
+            (recur (rest edit1) (cons [o2 (- p2 p1')] (rest edit2))
+                   (conj out [op1 [o2 p1']]))
+            0
+            (recur (rest edit1) (rest edit2)
+                   (conj out [op1 op2]))
+            1
+            (let [left (if (vector? p1) (vec (drop p2 p1)) (- p1 p2))
+                  taken (if (vector? p1) (vec (take p2 p1)) p2)]
+              (recur (cons [o1 left] (rest edit1)) (rest edit2)
+                     (conj out [[o1 taken] op2])))))))))
+
+(defn compose
+  ([edit1 edit2]
+    (assert (= (count-after edit1) (count-before edit2))
+            (str "transom/compose: length mismatch" \newline
+                 "Edit 1: " edit1 \newline
+                 "Edit 2: " edit2))
+    (letfn
+      [(compare-ops
+         [out [op1 op2]]
+         (match [op1 op2]
+           [[:delete _] _          ] (conj out op1)
+           [_           [:insert _]] (conj out op2)
+           [[:insert _] [:retain _]] (conj out op1)
+           [[:insert _] [:delete _]] out
+           [[:retain _] [:retain _]] (conj out op1)
+           [[:retain _] [:delete _]] (conj out op2)
+           ;; We need these cases for weird edge cases
+           ;; e.g. (compose [[:delete 0]] [[:retain 0]])
+           [nil _  ] out
+           [_   nil] out))]
+      (->> (align-compose edit1 edit2)
+           (reduce compare-ops [])
+           pack)))
+  ([edit1 edit2 & more]
+    (reduce compose (compose edit1 edit2) more)))
+
+(defn ^:private align-transform
+  [edit1 edit2]
+  (loop [edit1 edit1, edit2 edit2, out [[] []]]
+    (let [op1 (first edit1) op2 (first edit2)]
+      (cond
+        (nil? op1) (into out (map #(vector nil %) edit2))
+        (nil? op2) (into out (map #(vector % nil) edit1))
+        (= :insert (first op1)) (recur (rest edit1) edit2 (conj out [op1 nil]))
+        (= :insert (first op2)) (recur edit1 (rest edit2) (conj out [nil op2]))
+        :else
+        (let [[o1 p1] op1
+              [o2 p2] op2]
+          (case (compare p1 p2)
+            -1 (recur (rest edit1)
+                      (cons [o2 (- p2 p1)] (rest edit2))
+                      (conj out [op1 [o2 p1]]))
+            0  (recur (rest edit1) (rest edit2)
+                      (conj out [op1 op2]))
+            1  (recur (cons [o1 (- p1 p2)] (rest edit1))
+                      (rest edit2)
+                      (conj out [[o1 p2] op2]))))))))
+
+(defn transform
+  [edit1 edit2]
+  (assert (= (count-before edit1) (count-before edit2))
+          (str "transom/transform: length mismatch" \newline
+               "Edit 1: " edit1 \newline
+               "Edit 2: " edit2))
+  (letfn
+    [(compare-ops
+       [out [op1 op2]]
+       (match [op1 op2]
+         [[:insert p1] _           ] (conj out [op1 [:retain (count p1)]])
+         [_            [:insert p2]] (conj out [[:retain (count p2)] op2])
+         [[:retain _ ] [:retain _ ]] (conj out [op1 op2])
+         [[:retain p1] [:delete p2]] (conj out [nil op2])
+         [[:delete p1] [:retain p2]] (conj out [op1 nil])
+         :else (conj out [nil nil])))]
+    (->> (align-transform edit1 edit2)
+         (reduce compare-ops [])
+         pack-pairs)))
+
+(defn transform-key
+  [key edit destructive?]
+  (loop [key key, index 0, edit edit]
+    (if-let [[o p] (first edit)]
+      (case o
+        :retain
+        (recur key (+ index p) (rest edit))
+
+        :delete
+        (if (>= key index)
+          (cond
+            (>= (- key index) p) (recur (- key p) index (rest edit))
+            (not destructive?) 0)
+          (recur key index (rest edit)))
+
+        :insert
+        (let [p (count p)]
+          (if (>= key index)
+            (recur (+ key p) (+ index p) (rest edit))
+            (recur key (+ index p) (rest edit)))))
+      key)))
