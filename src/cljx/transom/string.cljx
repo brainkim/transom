@@ -1,9 +1,4 @@
-(ns transom.string
-  (:require
-      #+clj [clojure.core.match :refer [match]]
-     #+cljs [cljs.core.match])
-  #+cljs
-  (:require-macros [cljs.core.match.macros :refer [match]]))
+(ns transom.string)
 
 (def ^:private nop? (some-fn nil? #(= (second %) 0) #(= (second %) "")))
 
@@ -26,7 +21,9 @@
 
 (defn ^:private pack-pairs
   [pairs]
-  (map pack (apply mapv vector pairs)))
+  (if (empty? pairs)
+    pairs
+    (map pack (apply mapv vector pairs))))
 
 (defn count-before
   [edit]
@@ -145,17 +142,20 @@
     (letfn
       [(compare-ops
          [out [op1 op2]]
-         (match [op1 op2]
-           [[:delete _] _          ] (conj out op1)
-           [_           [:insert _]] (conj out op2)
-           [[:insert _] [:retain _]] (conj out op1)
-           [[:insert _] [:delete _]] out
-           [[:retain _] [:retain _]] (conj out op1)
-           [[:retain _] [:delete _]] (conj out op2)
-           ;; We need these cases for weird edge cases
-           ;; e.g. (compose [[:delete 0]] [[:retain 0]])
-           [nil _  ] out
-           [_   nil] out))]
+         (let [[o1 p1] op1
+               [o2 p2] op2]
+           (case [o1 o2]
+             [:insert :insert] (conj out op2)
+             [:insert :retain] (conj out op1)
+             [:insert :delete] out
+             [:retain :insert] (conj out op2)
+             [:retain :retain] (conj out op1)
+             [:retain :delete] (conj out op2)
+             ;[:delete :insert] (conj out op1)
+             [:delete nil    ] (conj out op1)
+             [nil     :insert] (conj out op2)
+             [:delete :retain] (conj out op1)
+             [:delete :delete] (conj out op1))))]
       (->> (align-compose edit1 edit2)
            (reduce compare-ops [])
            pack)))
@@ -193,13 +193,22 @@
   (letfn
     [(compare-ops
        [out [op1 op2]]
-       (match [op1 op2]
-         [[:insert p1] _           ] (conj out [op1 [:retain (count p1)]])
-         [_            [:insert p2]] (conj out [[:retain (count p2)] op2])
-         [[:retain _ ] [:retain _ ]] (conj out [op1 op2])
-         [[:retain p1] [:delete p2]] (conj out [nil op2])
-         [[:delete p1] [:retain p2]] (conj out [op1 nil])
-         :else (conj out [nil nil])))]
+       (let [[o1 p1] op1
+             [o2 p2] op2]
+         (case [o1 o2]
+           ;[:insert :insert]
+           [:insert nil    ] (conj out [op1 [:retain (count p1)]])
+           [nil     :insert] (conj out [[:retain (count p2)] op2])
+           [:insert :retain] (conj out [op1 [:retain (count p1)]])
+           [:insert :delete] (conj out [op1 [:retain (count p1)]])
+           [:retain :insert] (conj out [[:retain (count p2)] op2])
+           [:retain :retain] (conj out [op1 op2])
+           [:retain :delete] (conj out [nil op2])
+           [:delete :insert] (conj out [[:retain (count p2)] op2])
+           [:delete :retain] (conj out [op1 nil])
+           [:delete :delete] out
+           [nil     nil    ] out)
+         ))]
     (->> (align-transform edit1 edit2)
          (reduce compare-ops [])
          pack-pairs)))
