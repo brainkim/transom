@@ -207,8 +207,7 @@
            [:delete :insert] (conj out [[:retain (count p2)] op2])
            [:delete :retain] (conj out [op1 nil])
            [:delete :delete] out
-           [nil     nil    ] out)
-         ))]
+           [nil     nil    ] out)))]
     (->> (align-transform edit1 edit2)
          (reduce compare-ops [])
          pack-pairs)))
