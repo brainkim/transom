@@ -7,12 +7,6 @@
             [clojure.test.check.properties :as prop]  
             [transom.string :refer :all]))
 
-(deftest count-test
-  (let [edit [[:retain 2] [:delete 1] [:insert "foo"]]]
-    (are [x y] (= x y)
-      3 (count-before edit)
-      5 (count-after  edit))))
-
 (deftest patch-test
   (are [x y] (= x y)
     "abxcd"
