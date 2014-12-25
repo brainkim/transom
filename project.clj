@@ -4,9 +4,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/clojurescript "0.0-2268"]
-                 [com.keminglabs/cljx "0.3.2"]
-                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
-                 [org.clojure/core.typed "0.2.48"]]
+                 [com.keminglabs/cljx "0.3.2"]]
   :source-paths ["src/clj" "src/cljx"]
   :test-paths ["test" "target/test-classes"]
   :profiles {:dev
@@ -19,6 +17,7 @@
                              [org.clojure/test.check "0.5.7"]
                              [com.cemerick/clojurescript.test "0.3.0"]
                              [com.cemerick/double-check "0.5.7"]
+                             [org.clojure/core.async "0.1.278.0-76b25b-alpha"] 
                              [bidi "1.10.2"]]
               :plugins [[lein-cljsbuild "1.0.3"]
                         [com.keminglabs/cljx "0.4.0"]]
