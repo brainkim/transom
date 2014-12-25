@@ -24,7 +24,7 @@
   [pairs]
   (if (empty? pairs)
     pairs
-    (map pack (apply mapv vector pairs))))
+    (map pack (apply map vector pairs))))
 
 (defn count-before
   [edit]
@@ -185,7 +185,10 @@
           (recur (conj out [op1 [o2 (take* p1 p2)]])
                  (rest edit1)
                  (cons [o2 (drop* p1 p2)] (rest edit2)))
-          0 (recur (conj out [op1 op2]) (rest edit1) (rest edit2))
+          0
+          (recur (conj out [op1 op2])
+                 (rest edit1)
+                 (rest edit2))
           1
           (recur (conj out [[o1 (take* p2 p1)] op2])
                  (cons [o1 (drop* p2 p1)] (rest edit1))
@@ -221,25 +224,12 @@
   [caret edit]
   ;; caret is the little blinky line thing
   ;; index is where we are in the (new?) document
-  (loop [caret caret, index 0, edit edit]
-    (if (empty? edit)
-      caret
-      (let [[o p :as op] (first edit)]
+  (first
+    (reduce
+      (fn [[caret index] [o p]]
         (case o
-          :retain
-          (recur caret
-                 (+ index p)
-                 (rest edit))
-          :delete
-          (recur (if (> caret index)
-                   (max (- caret p) 0)
-                   caret)
-                 index
-                 (rest edit))
-          :insert
-          (let [op-len (count p)]
-            (recur (if (>= caret index)
-                     (+ caret op-len)
-                     caret)
-                   (+ index op-len)
-                   (rest edit))))))))
+          :retain [caret, (+ index p)]
+          :delete [(max (- caret p) 0), index]
+          :insert [(if (>= caret index) (+ caret (count p)) caret), (+ index (count p))]))
+      [caret, 0]
+      edit)))

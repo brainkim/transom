@@ -1,4 +1,4 @@
-(ns transom.indexed-test
+(ns transom.vector-test
   (:require [transom.core :as transom]
             [transom.sequential :as ts]
             [clojure.test :refer :all]

@@ -47,6 +47,16 @@
                             {[:strings 3] [[:insert "orange"]]}
                             {[:strings 3] [[:retain 6] [:insert " is the new black"]]})))))
 
+(deftest deep-compose-test
+  (let [doc {}]
+    (is (= {[] {:strings [:insert []]}
+            [:strings] [[:insert ["a" "b" "c"]]]
+            [:strings 0] [[:retain 1] [:insert "bba"]]}
+           (transom/compose doc
+                            {[] {:strings [:insert []]}}
+                            {[:strings] [[:insert ["a" "b" "c"]]]}
+                            {[:strings 0] [[:retain 1] [:insert "bba"]]})))))
+
 (deftest transform-test
   (let [doc {:strings ["s" "sa" "sad"]}
         edit-1 {[:strings 0] [[:insert "a"] [:retain 1]]}
