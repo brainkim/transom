@@ -35,24 +35,4 @@
     (let [edit1 (tv/diff m1 m2)
           edit2 (tv/diff m1 m3)
           [edit1' edit2'] (tv/transform edit1 edit2)]
-      (= (tv/patch m1 edit1 edit2')
-         (tv/patch m1 edit2 edit1')))))
-
-#_(defspec composing-transforms
-  100
-  (prop/for-all [m1 simple-vector-gen
-                 m2 simple-vector-gen
-                 m3 simple-vector-gen]
-    (let [old (tv/diff m1 m2)
-          new (tv/diff m1 m3)
-          [old' new'] (tv/transform old new)]
-      (= (tv/compose old new') (tv/compose new old')))))
-
-;; TODO(brian): invert not implemented
-#_(defspec inverting-edits
-  100
-  (prop/for-all [m1 simple-vector-gen
-                 m2 simple-vector-gen]
-    (let [edit (tv/diff m1 m2)
-          inverted (tv/invert edit)]
-      (= m1 (tv/patch m1 edit inverted)))))
+      (= (tv/patch m1 edit1 edit2') (tv/patch m1 edit2 edit1')))))
