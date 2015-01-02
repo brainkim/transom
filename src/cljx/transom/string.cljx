@@ -1,25 +1,22 @@
 (ns transom.string
-  (:require [transom.sequential :refer [pack-with
-                                        diff-abstract
-                                        patch-abstract
-                                        compose-abstract
-                                        transform-abstract]]))
+  (:require [clojure.string :as str]
+            [transom.sequential :as ts]))
 
-(def pack-fn (partial apply str))
+(def pack-fn str/join)
 
-(def pack (pack-with pack-fn))
+(def pack (ts/pack-with pack-fn))
 
-(defn diff [a b] (pack (diff-abstract a b)))
+(defn diff [a b] (pack (ts/diff-abstract a b)))
 
 (defn patch
-  ([doc edit] (pack-fn (patch-abstract doc edit)))
+  ([doc edit] (pack-fn (ts/patch-abstract doc edit)))
   ([doc edit & edits] (reduce patch (patch doc edit) edits)))
 
 (defn compose
-  ([edit1 edit2] (pack (compose-abstract edit1 edit2)))
+  ([edit1 edit2] (pack (ts/compose-abstract edit1 edit2)))
   ([edit1 edit2 & more] (reduce compose (compose edit1 edit2) more)))
 
-(defn transform [edit1 edit2] (map pack (transform-abstract edit1 edit2)))
+(defn transform [edit1 edit2] (map pack (ts/transform-abstract edit1 edit2)))
 
 (defn transform-caret
   [caret edit]
