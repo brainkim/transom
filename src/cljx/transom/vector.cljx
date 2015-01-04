@@ -3,13 +3,15 @@
 
 (def pack-fn vec)
 
-(def pack (ts/pack-with pack-fn))
+(def pack (partial ts/pack-with pack-fn))
 
 (defn diff [a b] (pack (ts/diff-abstract a b)))
 
 (defn patch
   ([doc edit] (pack-fn (ts/patch-abstract doc edit)))
   ([doc edit & edits] (reduce patch (patch doc edit) edits)))
+
+(defn invert [edit] (pack (ts/invert-abstract edit)))
 
 (defn compose
   ([edit1 edit2] (pack (ts/compose-abstract edit1 edit2)))
@@ -18,23 +20,25 @@
 (defn transform [edit1 edit2] (map pack (ts/transform-abstract edit1 edit2)))
 
 (defn transform-key
-  [key edit destructive?]
-  (loop [key key, index 0, edit edit]
+  [k edit destructive?]
+  (loop [k k, i 0, edit edit]
     (if-let [[o p] (first edit)]
       (case o
         :retain
-        (recur key (+ index p) (rest edit))
+        (recur k (+ i p) (rest edit))
 
         :delete
-        (if (>= key index)
-          (cond
-            (>= (- key index) p) (recur (- key p) index (rest edit))
-            (not destructive?) 0)
-          (recur key index (rest edit)))
+        (let [p (count p)]
+          (if (>= k i)
+            (cond
+              (not destructive?) 0
+              (>= (- k i) p) (recur (- k p) i (rest edit))
+              :else nil)
+            (recur k i (rest edit))))
 
         :insert
         (let [p (count p)]
-          (if (>= key index)
-            (recur (+ key p) (+ index p) (rest edit))
-            (recur key (+ index p) (rest edit)))))
-      key)))
+          (if (>= k i)
+            (recur (+ k p) (+ i p) (rest edit))
+            (recur k (+ i p) (rest edit)))))
+      k)))
