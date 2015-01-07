@@ -38,11 +38,11 @@
         (conj edit op)))
     (conj edit op)))
 
-(def ^:private packable #{:insert :delete})
+(def ^{:private true :arglists '([o])} packable? (comp boolean #{:insert :delete}))
 
 (defn ^:private pack-op-with
   [f [o p :as op]]
-  (if (packable o)
+  (if (packable? o)
     [o (f p)]
     op))
 
