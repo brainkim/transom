@@ -7,7 +7,7 @@
   :source-paths ["src/clj" "src/cljx"]
   :test-paths ["test" "target/test-classes"]
   :profiles {:dev
-             {:dependencies [[org.clojure/test.check "0.5.8"]
+             {:dependencies [[org.clojure/test.check "0.6.2"]
                              [om "0.6.4"]
                              [ring/ring "1.2.1"]
                              [compojure "1.1.6"]

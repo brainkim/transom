@@ -261,3 +261,28 @@
             [nil     :insert] [(conj edit1 [:retain (count* p2)]) (conj edit2 op2)])))
       [[] []]
       aligned)))
+
+(defn transform-index
+  ([k edit] (transform-index k edit false))
+  ([k edit destructive?]
+    (loop [k k, i 0, edit edit]
+      (if-let [[o p] (first edit)]
+        (case o
+          :retain
+          (recur k (+ i p) (rest edit))
+
+          :delete
+          (let [p (count p)]
+            (if (>= k i)
+              (cond
+                (not destructive?) 0
+                (>= (- k i) p) (recur (- k p) i (rest edit))
+                :else nil)
+              (recur k i (rest edit))))
+
+          :insert
+          (let [p (count p)]
+            (if (>= k i)
+              (recur (+ k p) (+ i p) (rest edit))
+              (recur k (+ i p) (rest edit)))))
+        k))))

@@ -14,73 +14,63 @@
 
 (extend-protocols impl/Diffable
   [#+clj String #+cljs string]
-  (diff [this that]
-    (ts/diff this that))
+  (diff [this that] (ts/diff this that))
 
   [#+clj IPersistentVector #+cljs PersistentVector]
-  (diff [this that]
-    (tv/diff this that))
+  (diff [this that] (tv/diff this that))
 
   [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
-  (diff [this that]
-    (tm/diff this that)))
+  (diff [this that] (tm/diff this that)))
 
 (extend-protocols impl/Patchable
   [#+clj String #+cljs string]
-  (patch [this edit]
-    (ts/patch this edit))
+  (patch [this edit] (ts/patch this edit))
 
   [#+clj IPersistentVector #+cljs PersistentVector]
-  (patch [this edit]
-    (tv/patch this edit))
+  (patch [this edit] (tv/patch this edit))
 
   [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
-  (patch [this edit]
-    (tm/patch this edit)))
+  (patch [this edit] (tm/patch this edit)))
 
 (extend-protocols impl/WithInvertibleEdit
+  [#+clj String #+cljs string]
+  (invert [this edit] (ts/invert edit))
+
+  [#+clj IPersistentVector #+cljs PersistentVector]
+  (invert [this edit] (tv/invert edit))
+
   [#+clj IPersistentMap]
-  (invert [this edit]
-    (tm/invert edit)))
+  (invert [this edit] (tm/invert edit)))
 
 (extend-protocols impl/WithRebasableRef
   [#+clj String #+cljs string]
-  (rebase-ref [this key edit destructive?]
-    (ts/transform-caret key edit))
+  (rebase-ref [this key edit destructive?] (ts/transform-caret key edit))
 
   [#+clj IPersistentVector #+cljs PersistentVector]
-  (rebase-ref [this key edit destructive?]
-    (tv/transform-key key edit destructive?))
+  (rebase-ref [this key edit destructive?] (tv/transform-key key edit destructive?))
 
   [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
-  (rebase-ref [this key edit destructive?]
-    (tm/transform-key key edit)))
+  (rebase-ref [this key edit destructive?] (tm/transform-key key edit)))
 
 (extend-protocols impl/WithComposableEdit
   [#+clj String #+cljs string]
-  (compose [this old-edit new-edit]
-    (ts/compose old-edit new-edit))
+  (compose [this old-edit new-edit] (ts/compose old-edit new-edit))
 
   [#+clj IPersistentVector #+cljs PersistentVector]
-  (compose [this old-edit new-edit]
-    (tv/compose old-edit new-edit))
+  (compose [this old-edit new-edit] (tv/compose old-edit new-edit))
 
   [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
-  (compose [this old-edit new-edit]
-    (tm/compose old-edit new-edit)))
+  (compose [this old-edit new-edit] (tm/compose old-edit new-edit)))
 
 (extend-protocols impl/WithTransformableEdit
   [#+clj String #+cljs string]
-  (transform [this my-edit your-edit]
-    (ts/transform my-edit your-edit))
+  (transform [this my-edit your-edit] (ts/transform my-edit your-edit))
 
   [#+clj IPersistentVector #+cljs PersistentVector]
-  (transform [this my-edit your-edit]
-    (tv/transform my-edit your-edit))
+  (transform [this my-edit your-edit] (tv/transform my-edit your-edit))
 
   [#+clj IPersistentMap #+cljs PersistentHashMap #+cljs PersistentArrayMap]
-  (transform [this my-edit your-edit]
-    (tm/transform my-edit your-edit)))
+  (transform [this my-edit your-edit] (tm/transform my-edit your-edit)))
 
 (defn diff
   [old new]
