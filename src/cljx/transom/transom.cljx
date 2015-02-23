@@ -4,9 +4,9 @@
             [transom.string :as ts]
             [transom.vector :as tv]
             [transom.map :as tm]
-      #+clj [transom.macros :refer [extend-protocols]])
+      #+clj [transom.macros :refer [extend-protocols assert*]])
   #+cljs
-  (:require-macros [transom.macros :refer [extend-protocols]])
+  (:require-macros [transom.macros :refer [extend-protocols assert*]])
   #+clj
   (:import (java.lang String)
            (clojure.lang IPersistentVector)
@@ -74,7 +74,7 @@
 
 (defn diff
   [old new]
-  (assert (= (type old) (type new)))
+  (assert* (= (type old) (type new)))
   (impl/diff old new))
 
 (defn patch

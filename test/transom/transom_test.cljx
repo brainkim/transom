@@ -6,7 +6,83 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]))
 
-;; TODO(brian): replace these tests with generative tests!
+(comment
+  ;; WIP(brian): generative tests for path logic
+(defn aseq
+  [a]
+  (cond
+    (sequential? a) (map-indexed vector a)
+    (associative? a) (seq a)))
+
+(defn paths-in
+  [a]
+  (if (associative? a)
+    (concat
+      [[]]
+      (mapcat
+        (fn [[k v]]
+          (concat
+            [[k]]
+            (for [path (paths-in v) :when (seq path)]
+              (into [k] path))))
+        (aseq a)))
+    []))
+
+(defn contains-in?
+  [coll [k & ks]]
+  (if ks
+    (and (contains? coll k) (contains-in? (get coll k) ks))
+    (or (nil? k) (contains? coll k))))
+
+;; Generators
+(def associative
+  (gen/recursive-gen
+    (fn [s] (gen/one-of [(gen/vector s) (gen/map s s)]))
+    gen/string-alphanumeric))
+
+;; Only takes generators of strings, maps, and vectors
+(defn same-type
+  [v]
+  (cond
+    (string? v) gen/string-alphanumeric
+    (map? v) (gen/map gen/string-alphanumeric gen/string-alphanumeric)
+    (vector? v) (gen/vector gen/string-alphanumeric)))
+
+(defn diff-gen
+  [gen]
+  (gen/bind gen
+    (fn [g]
+      (gen/bind (same-type g)
+        (fn [g']
+          (transom/diff g g'))))))
+
+(defn with-paths
+  ([a-gen] (with-paths a-gen 1))
+  ([a-gen num-paths]
+    (gen/fmap
+      (fn [a]
+        (cons
+          a
+          (gen/sample (gen/elements (paths-in a)) num-paths)))
+      a-gen)))
+
+(defspec a-contains-all-paths
+  1000
+  (prop/for-all [a associative]
+    (every? (partial contains-in? a)
+      (paths-in a))))
+
+(def composed-edits
+  (gen/bind (with-paths associative)
+    (fn [a path]
+      (let [a' (get-in a path)
+            diff-gen (gen/bind (same-type a')
+                       (fn [a''] (transom/diff a' a'')))]
+        (gen/bind diff-gen
+          (fn [diff]
+            (gen/return 1)))))))
+  )
+
 (deftest unpatch-test
   (let [doc {1 ["abc"]}
         edit {[] {2 [:insert 0]}
@@ -58,24 +134,24 @@
                             {[:a 3] [[:retain 6] [:insert " is the new black"]]})))))
 
 (deftest deep-compose-test
-  (is (= {[] {:strings [:insert [""]]}
-          [:strings] [[:retain 1] [:insert ["a" "b" "c"]]]
-          [:strings 0] [[:insert "bba"]]}
+  (is (= {[] {:a [:insert [""]]}
+          [:a] [[:retain 1] [:insert ["a" "b" "c"]]]
+          [:a 0] [[:insert "bba"]]}
           (transom/compose {}
-                           {[] {:strings [:insert [""]]}}
-                           {[:strings] [[:retain 1] [:insert ["a" "b" "c"]]]}
-                           {[:strings 0] [[:insert "bba"]]})))
+                           {[] {:a [:insert [""]]}}
+                           {[:a] [[:retain 1] [:insert ["a" "b" "c"]]]}
+                           {[:a 0] [[:insert "bba"]]})))
   #_(is (= {}
-         (transom/compose {:strings "poop"}
-                          {[:strings] [[:retain 4] [:insert " in my pants"]]}
-                          {[] {:strings [:update "poop in my pants" "poop"]}}))))
+         (transom/compose {:a "poop"}
+                          {[:a] [[:retain 4] [:insert " in my pants"]]}
+                          {[] {:a [:update "poop in my pants" "poop"]}}))))
 
 (deftest transform-test
-  (let [doc {:strings ["s" "sa" "sad"]}
-        edit-1 {[:strings 0] [[:insert "a"] [:retain 1]]}
-        edit-2 {[:strings 0] [[:delete "s"]]}
-        edit-1' {[:strings 0] [[:insert "a"]]}
-        edit-2' {[:strings 0] [[:retain 1] [:delete "s"]]}]
+  (let [doc {:a ["s" "sa" "sad"]}
+        edit-1 {[:a 0] [[:insert "a"] [:retain 1]]}
+        edit-2 {[:a 0] [[:delete "s"]]}
+        edit-1' {[:a 0] [[:insert "a"]]}
+        edit-2' {[:a 0] [[:retain 1] [:delete "s"]]}]
     (is (= [edit-1 {}]
            (transom/transform doc edit-1 {})))
     (is (= [{} edit-1]
