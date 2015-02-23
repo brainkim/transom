@@ -65,7 +65,8 @@
   (is (= [{} {}]
          (tm/transform {:a [:delete 1]} {:a [:delete 1]}))))
 
-(def simple-map-gen (gen/map gen/keyword gen/int))
+;; can't use keyword generator cuz it's slow
+(def simple-map-gen (gen/map gen/string gen/int))
 
 (defspec patching-diffs
   100

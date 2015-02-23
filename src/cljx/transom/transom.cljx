@@ -1,4 +1,4 @@
-(ns transom.core
+(ns transom.transom
   (:require [clojure.set :as set]
             [transom.protocols :as impl]
             [transom.string :as ts]
@@ -80,54 +80,125 @@
 (defn patch
   ([doc edit-map]
     (reduce
-      (fn [state [path edit]]
+      (fn [doc [path edit]]
         (if (empty? path)
           (impl/patch doc edit)
-          (update-in state path impl/patch edit)))
+          (update-in doc path impl/patch edit)))
       doc
       (sort-by (comp count key) edit-map)))
   ([doc edit-map & edit-maps]
     (reduce patch (patch doc edit-map) edit-maps)))
+
+(defn unpatch
+  ([doc edit-map]
+    (reduce
+      (fn [doc [path edit]]
+        (if (empty? path)
+          (impl/patch doc (impl/invert doc edit))
+          (let [inverted (impl/invert (get-in doc path) edit)]
+            (update-in doc path impl/patch inverted))))
+      doc
+      (sort-by (comp - count key) edit-map))))
 
 (defn ^:private prefixes?
   [path-1 path-2]
   (and (< (count path-1) (count path-2))
        (= path-1 (subvec path-2 0 (count path-1)))))
 
-(defn ^:private rebase-mappings
-  [doc old new]
-  (into {}
-    (for [[new-path new-edit] new
-          old-path (keys old) :when (prefixes? new-path old-path)]
-      (let [state (get-in doc new-path)
-            ki (count new-path)
-            k (nth old-path ki)
-            reb-k (impl/rebase-ref state k new-edit true)
-            reb-path (when reb-k (assoc old-path ki reb-k))]
-        [old-path reb-path]))))
+(defn ^:private group-fn
+  [[old new]]
+  (cond
+    (nil? new) :cleared
+    (= old new) :unchanged
+    :else :changed))
 
-(defn rebase-paths
+(defn ^:private rename-key
+  [m a b]
+  (-> m
+      (assoc b (get m a))
+      (dissoc a)))
+
+(defn rebase-compose
   [doc old new]
-  (let [mappings (rebase-mappings doc old new)
-        reb (set/rename-keys old mappings)]
-    (dissoc reb nil)))
+  (let [!old (atom old)
+        !new (atom new)]
+    (doseq [[new-path new-edit] new
+            [old-path old-edit] old
+            :when (prefixes? new-path old-path)]
+      (let [doc' (get-in doc new-path)
+            k-index (count new-path)
+            k (nth old-path k-index)
+            reb-k (impl/rebase-ref doc' k new-edit true)]
+        (if (nil? reb-k)
+          (do
+            (swap! !old dissoc old-path)
+            (swap! !new assoc new-path
+              (impl/diff (unpatch doc' {(subvec old-path (count new-path)) old-edit})
+                         (patch doc' {[] new-edit}))))
+          (let [reb-path (assoc old-path k-index reb-k)]
+            (swap! !old rename-key old-path reb-path)))))
+    [@!old @!new]))
 
 (defn compose
   ([doc old new]
     (let [doc (patch doc old)
-          reb (rebase-paths doc old new)]
+          [old new] (rebase-compose doc old new)]
       (reduce
         (fn [reb [new-path new-edit]]
           (let [reb-edit (get reb new-path)]
             (if (not (nil? reb-edit))
-              (let [state (get-in doc new-path)
-                    cmp-edit (impl/compose state reb-edit new-edit)]
+              (let [doc' (get-in doc new-path)
+                    cmp-edit (impl/compose doc' reb-edit new-edit)]
                 (assoc reb new-path cmp-edit))
               (assoc reb new-path new-edit))))
-        reb
+        old
         new)))
   ([doc old new & more]
     (reduce (partial compose doc) (compose doc old new) more)))
+
+(comment 
+  (def doc {:a {:b {:c -1}}})
+  (compose doc
+           {[:a] {:b [:update {:c -1}]}
+            [:a :b] {:c [:update 0 1]}}
+           {[:a] {:b [:delete {:c 1}]}})
+  (compose doc
+           {[:a :b] {:c [:update 0 1]}
+            [:a] {}}
+           {[:a] {:b [:delete {:c 1}]}})
+  (compose doc
+           {[:a] {:b [:update {:c -1}]}
+            [:a :b] {:c [:update 0 1]}}
+           {[:a] {:b [:delete {:c 1}]}})
+  (compose doc
+           {[:a :b] {:c [:update 0 1]}
+            [:a] {}}
+           {[:a] {:b [:delete {:c 1}]}}))
+
+(defn ^:private rebase-transform
+  [doc in ex]
+  (let [!in (atom in)
+        !ex (atom ex)]
+    (doseq [[ex-path ex-edit] ex
+            [in-path in-edit] in
+            :when (prefixes? ex-path in-path)]
+      (let [doc' (get-in doc ex-path)
+            k-index (count ex-path)
+            k (nth in-path k-index)
+            reb-k (impl/rebase-ref doc' k ex-edit true)]
+        (if (nil? reb-k)
+          (do
+            (swap! !in dissoc in-path)
+            (prn
+              (impl/diff (patch doc' {(subvec in-path (count ex-path)) in-edit})
+                         (patch doc' {[] ex-edit}))
+              )
+            (swap! !ex assoc ex-path
+              (impl/diff (patch doc' {(subvec in-path (count ex-path)) in-edit})
+                         (patch doc' {[] ex-edit}))))
+          (let [reb-path (assoc in-path k-index reb-k)]
+            (swap! !in rename-key in-path reb-path)))))
+    [@!in @!ex]))
 
 (defn ^:private transform-shared
   [doc mine yours shared-paths]
@@ -150,9 +221,26 @@
               my-paths (filter ffn (keys mine))
               your-paths (filter ffn (keys yours))
               shared-paths (set/intersection (set my-paths) (set your-paths))
-              [mine yours] (transform-shared doc mine yours shared-paths)
-              mine' (rebase-paths doc mine (select-keys yours your-paths))
-              yours' (rebase-paths doc yours (select-keys mine my-paths))]
-          [mine' yours']))
+
+              [mine' yours']
+              (transform-shared doc mine yours shared-paths)
+
+              [mine'' yours''']
+              (rebase-transform doc mine' (select-keys yours' your-paths))
+
+              [yours'' mine''']
+              (rebase-transform doc yours' (select-keys mine' my-paths))]
+          [(merge mine'' mine''') (merge yours'' yours''')]))
       [mine yours]
       (range (inc max-level)))))
+
+(comment
+  (def doc {:a {:b {:c 0}}})
+  (transform doc
+             {[:a :b] {:c [:update 0 1]}}
+             {[:a :b] {:c [:update 0 2]}})
+  (transform doc
+    {[:a] {:b [:update {:c 0} {:c :z}]}
+     [:a :b] {:c [:update :z 1]}}
+    {[:a :b] {:c [:update 0 2]}})
+  )

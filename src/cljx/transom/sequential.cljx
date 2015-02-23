@@ -1,9 +1,13 @@
-(ns transom.sequential)
+(ns transom.sequential
+  (:require
+      #+clj [transom.macros :refer [assert*]]) 
+  #+cljs
+  (:require-macros [transom.macros :refer [assert*]]))
 
-;; a bunch of fake seq functions to pretend like numbers are seqs
+;; a bunch of fake seq functions to pretend numbers are seqs
 (defn ^:private count* [a]
   (if (number? a)
-    (do (assert (>= a 0)) a)
+    (do (assert* (>= a 0)) a)
     (count a)))
 
 (defn ^:private empty?* [a]
@@ -96,7 +100,8 @@
               s (suffix-length a' b')]
           (create-edit a b p s))))))
 
-(defn count-before
+;; helper functions to help with assertions
+(defn ^:private count-before
   [edit]
   (letfn
     [(inc-count
@@ -107,7 +112,7 @@
         :insert c))]
     (reduce inc-count 0 edit)))
 
-(defn count-after
+(defn ^:private count-after
   [edit]
   (letfn
     [(inc-count
@@ -120,15 +125,15 @@
 
 (defn patch-abstract
   [doc edit]
-  (assert (= (count doc) (count-before edit))
-          (str "transom/patch: length mismatch" \newline
-               "Doc: " doc \newline
-               "Edit: " edit))
+  (assert* (= (count doc) (count-before edit)))
   (second (reduce
             (fn [[doc out] [o p]]
               (case o
                 :retain [(drop p doc) (concat out (take p doc))]
-                :delete [(drop (count p) doc) out]
+                :delete
+                (do
+                  (assert* (= (take (count p) doc) (seq p)))
+                  [(drop (count p) doc) out])
                 :insert [doc (concat out p)]))
             [doc '()]
             edit)))
@@ -179,10 +184,7 @@
 
 (defn compose-abstract
   ([edit1 edit2]
-    (assert (= (count-after edit1) (count-before edit2))
-            (str "transom/compose: length mismatch" \newline
-                 "Edit 1: " edit1 \newline
-                 "Edit 2: " edit2))
+    (assert* (= (count-after edit1) (count-before edit2)))
     (let [aligned (align-compose edit1 edit2)]
       (reduce
         (fn [out [op1 op2]]
@@ -239,10 +241,7 @@
 
 (defn transform-abstract
   [edit1 edit2]
-  (assert (= (count-before edit1) (count-before edit2))
-          (str "transom/transform: length mismatch" \newline
-               "Edit 1: " edit1 \newline
-               "Edit 2: " edit2))
+  (assert* (= (count-before edit1) (count-before edit2)))
   (let [aligned (align-transform edit1 edit2)]
     (reduce
       (fn [[edit1 edit2 :as transformed] [op1 op2]]

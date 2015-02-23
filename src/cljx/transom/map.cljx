@@ -1,7 +1,6 @@
 (ns transom.map
   (:require [clojure.set :as set]
             [transom.utils :refer [key-set]]))
-
 (defn diff
   [this that]
   (let [all-keys (set/union (key-set this) (key-set that))]
@@ -13,14 +12,24 @@
             (and (not (contains? this k)) (contains? that k)) [k [:insert new-v]]
             (not= old-v new-v) [k [:update old-v new-v]]))))))
 
+;; TODO(brian): create naming conventions for the components of an edit
 (defn patch
   ([this edit]
     (reduce
       (fn [this [k [a b c]]]
         (case a
-          :delete (dissoc this k)
-          :update (assoc this k c)
-          :insert (assoc this k b)))
+          :delete
+          (do
+            (assert (= (get this k) b))
+            (dissoc this k))
+          :update
+          (do
+            (assert (= (get this k) b))
+            (assoc this k c))
+          :insert
+          (do
+            (assert (not (contains? this k)))
+            (assoc this k b))))
       this
       edit))
   ([this edit & edits]
@@ -40,6 +49,11 @@
   ([old new]
     (let [cmp (merge-with
                 (fn [[a b c] [d e f]]
+                  (assert (not (contains? #{[:insert :insert]
+                                            [:update :insert]
+                                            [:delete :update]
+                                            [:delete :delete]}
+                                          [a d])))
                   (case [a d]
                     ;[:insert :insert]
                     [:insert :update] [:insert f]
@@ -62,6 +76,11 @@
     (reduce
       (fn [[mine yours] k]
         (let [[a b c] (get mine k), [d e f] (get yours k)]
+          (assert (not (contains? #{[:insert :update]
+                                    [:insert :delete]
+                                    [:update :insert]
+                                    [:delete :insert]}
+                                  [a d])))
           (case [a d]
             [:insert :insert]
             (if (= b e)
