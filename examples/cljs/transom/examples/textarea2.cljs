@@ -8,21 +8,23 @@
             [goog.dom :as gdom]
             [clojure.browser.event :as event]
             [transom.examples.websocket :refer [socket]]))
-(enable-console-print!)
 
-(def ^:dynamic *sock* nil)
+(comment
+  (enable-console-print!)
 
-(def textarea
-  (->> (gdom/createDom "textarea" #js {:style "width: 500px; height: 500px;"})
-       (gdom/append (gdom/getElement "app"))))
+  (def ^:dynamic *sock* nil)
 
-(defn attach-events
-  [elem]
-  (letfn [(handler [ev] )]
-    (doseq [events []]
-      (-> elem
-          identity))))
+  (def textarea
+    (->> (gdom/createDom "textarea" #js {:style "width: 500px; height: 500px;"})
+         (gdom/append (gdom/getElement "app"))))
 
-(defn host
-  []
-  (.. js/window -location -host))
+  (defn attach-events
+    [elem]
+    (letfn [(handler [ev] )]
+      (doseq [events []]
+        (-> elem
+            identity))))
+
+  (defn host
+    []
+    (.. js/window -location -host)))

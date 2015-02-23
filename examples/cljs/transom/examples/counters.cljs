@@ -63,8 +63,10 @@
   [{:keys [path old-value new-value old-state new-state]}]
   (let [diff {path (transom/diff old-value new-value)}
         new-state' (transom/patch old-state diff)]
+    (println (pr-str @!composed) \newline
+             (pr-str diff))
     (swap! !composed #(transom/compose app-state % diff))
-    (println @!composed)
+    (println (pr-str @!composed))
     (let [composed @!composed
           new-state'' (transom/patch app-state composed)]
       (assert (= new-state new-state' new-state'')

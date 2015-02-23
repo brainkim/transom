@@ -9,6 +9,7 @@
             [goog.dom :as gdom]
             [goog.dom.selection :as selection]
             [transom.examples.websocket :refer [socket]]))
+(comment
 (enable-console-print!)
 
 (def ^:dynamic *sock* nil)
@@ -176,3 +177,4 @@
                         ed (edit-distance diff)]
                     (stage diff !stage))))})
     (om/root x-ray !stage {:target (gdom/getElement "xray")}))))
+)

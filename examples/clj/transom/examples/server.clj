@@ -8,7 +8,7 @@
             [compojure.route :as route]
             [com.stuartsierra.component :as component]))
 
-(defn websocket [req]
+#_(defn websocket [req]
   (let [example (get-in req [:route-params :example])
         room (get-in req [:rooms (keyword example)])]
     (server/with-channel req chan
@@ -19,24 +19,23 @@
         (fn [data]
           (async/put! room [(edn/read-string data) chan]))))))
 
-(defn wrap-rooms
+#_(defn wrap-rooms
   [app rooms]
   (fn [req]
     (let [req (assoc req :rooms rooms)]
       (app req))))
 
 (defroutes routes
-  (GET "/ws/:example" [example] websocket)
+  #_(GET "/ws/:example" [example] websocket)
   (route/files "/" {:root "resources"})
   (route/not-found "404 ¯\\_(ツ)_/¯"))
 
 (defrecord Server
-  [port rooms container]
+  [port container]
   component/Lifecycle
   (start [this]
     (let [app (-> routes
-                  wrap-edn-params
-                  (wrap-rooms rooms))]
+                  wrap-edn-params)]
       (println "Server started!")
       (assoc this :container (server/run-server app {:port port}))))
   (stop [this]
