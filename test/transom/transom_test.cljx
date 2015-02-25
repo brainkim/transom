@@ -65,7 +65,7 @@
                            {[] {:strings [:insert [""]]}}
                            {[:strings] [[:retain 1] [:insert ["a" "b" "c"]]]}
                            {[:strings 0] [[:insert "bba"]]})))
-  #_(is (= {}
+  (is (= {[] {}}
          (transom/compose {:strings "poop"}
                           {[:strings] [[:retain 4] [:insert " in my pants"]]}
                           {[] {:strings [:update "poop in my pants" "poop"]}}))))

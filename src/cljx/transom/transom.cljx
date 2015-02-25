@@ -118,10 +118,10 @@
       (assoc b (get m a))
       (dissoc a)))
 
+;; TODO(brian): I smell a beautiful tail-recursive function here
 (defn rebase-compose
   [doc old new]
-  (let [!old (atom old)
-        !new (atom new)]
+  (let [!old (atom old), !new (atom new)]
     (doseq [[new-path new-edit] new
             [old-path old-edit] old
             :when (prefixes? new-path old-path)]
@@ -130,11 +130,12 @@
             k (nth old-path k-index)
             reb-k (impl/rebase-ref doc' k new-edit true)]
         (if (nil? reb-k)
-          (do
+          (let [old-path' (subvec old-path (count new-path))]
             (swap! !old dissoc old-path)
             (swap! !new assoc new-path
-              (impl/diff (unpatch doc' {(subvec old-path (count new-path)) old-edit})
-                         (patch doc' {[] new-edit}))))
+              (impl/diff
+                (unpatch doc' {old-path' old-edit})
+                (impl/patch doc' new-edit))))
           (let [reb-path (assoc old-path k-index reb-k)]
             (swap! !old rename-key old-path reb-path)))))
     [@!old @!new]))
@@ -144,41 +145,22 @@
     (let [doc (patch doc old)
           [old new] (rebase-compose doc old new)]
       (reduce
-        (fn [reb [new-path new-edit]]
-          (let [reb-edit (get reb new-path)]
-            (if (not (nil? reb-edit))
+        (fn [old [new-path new-edit]]
+          (let [old-edit (get old new-path)]
+            (if (not (nil? old-edit))
               (let [doc' (get-in doc new-path)
-                    cmp-edit (impl/compose doc' reb-edit new-edit)]
-                (assoc reb new-path cmp-edit))
-              (assoc reb new-path new-edit))))
+                    cmp-edit (impl/compose doc' old-edit new-edit)]
+                (assoc old new-path cmp-edit))
+              (assoc old new-path new-edit))))
         old
         new)))
   ([doc old new & more]
     (reduce (partial compose doc) (compose doc old new) more)))
 
-(comment 
-  (def doc {:a {:b {:c -1}}})
-  (compose doc
-           {[:a] {:b [:update {:c -1}]}
-            [:a :b] {:c [:update 0 1]}}
-           {[:a] {:b [:delete {:c 1}]}})
-  (compose doc
-           {[:a :b] {:c [:update 0 1]}
-            [:a] {}}
-           {[:a] {:b [:delete {:c 1}]}})
-  (compose doc
-           {[:a] {:b [:update {:c -1}]}
-            [:a :b] {:c [:update 0 1]}}
-           {[:a] {:b [:delete {:c 1}]}})
-  (compose doc
-           {[:a :b] {:c [:update 0 1]}
-            [:a] {}}
-           {[:a] {:b [:delete {:c 1}]}}))
-
+;; TODO(brian): Reduce code dup with rebase-compose
 (defn ^:private rebase-transform
   [doc in ex]
-  (let [!in (atom in)
-        !ex (atom ex)]
+  (let [!in (atom in), !ex (atom ex)]
     (doseq [[ex-path ex-edit] ex
             [in-path in-edit] in
             :when (prefixes? ex-path in-path)]
@@ -187,15 +169,13 @@
             k (nth in-path k-index)
             reb-k (impl/rebase-ref doc' k ex-edit true)]
         (if (nil? reb-k)
-          (do
+          (let [in-path' (subvec in-path (count ex-path))
+                doc'' (get-in doc' in-path')]
             (swap! !in dissoc in-path)
-            (prn
-              (impl/diff (patch doc' {(subvec in-path (count ex-path)) in-edit})
-                         (patch doc' {[] ex-edit}))
-              )
             (swap! !ex assoc ex-path
-              (impl/diff (patch doc' {(subvec in-path (count ex-path)) in-edit})
-                         (patch doc' {[] ex-edit}))))
+              (impl/diff
+                (impl/patch doc'' in-edit)
+                (impl/patch doc' ex-edit))))
           (let [reb-path (assoc in-path k-index reb-k)]
             (swap! !in rename-key in-path reb-path)))))
     [@!in @!ex]))
@@ -233,14 +213,3 @@
           [(merge mine'' mine''') (merge yours'' yours''')]))
       [mine yours]
       (range (inc max-level)))))
-
-(comment
-  (def doc {:a {:b {:c 0}}})
-  (transform doc
-             {[:a :b] {:c [:update 0 1]}}
-             {[:a :b] {:c [:update 0 2]}})
-  (transform doc
-    {[:a] {:b [:update {:c 0} {:c :z}]}
-     [:a :b] {:c [:update :z 1]}}
-    {[:a :b] {:c [:update 0 2]}})
-  )
