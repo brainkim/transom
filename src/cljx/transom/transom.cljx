@@ -90,15 +90,15 @@
     (reduce patch (patch doc edit-map) edit-maps)))
 
 (defn unpatch
-  ([doc edit-map]
-    (reduce
-      (fn [doc [path edit]]
-        (if (empty? path)
-          (impl/patch doc (impl/invert doc edit))
-          (let [inverted (impl/invert (get-in doc path) edit)]
-            (update-in doc path impl/patch inverted))))
-      doc
-      (sort-by (comp - count key) edit-map))))
+  [doc edit-map]
+  (reduce
+    (fn [doc [path edit]]
+      (if (empty? path)
+        (impl/patch doc (impl/invert doc edit))
+        (let [inverted (impl/invert (get-in doc path) edit)]
+          (update-in doc path impl/patch inverted))))
+    doc
+    (sort-by (comp - count key) edit-map)))
 
 (defn ^:private prefixes?
   [path-1 path-2]
